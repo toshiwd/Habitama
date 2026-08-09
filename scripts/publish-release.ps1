@@ -20,8 +20,8 @@ try {
     if ($LASTEXITCODE -eq 0) { throw "Release already exists: $tag" }
     gh release create $tag $apk $manifest `
         --repo toshiwd/Habitama `
-        --title "ハビタマ $versionName" `
-        --notes "Phase 0: 目標1件、当日記録、部分達成・超過評価、累積エネルギー、7日履歴。"
+        --title "Habitama $versionName" `
+        --notes "Phase 0: one daily goal, partial and over-target evaluation, cumulative energy, and seven-day history."
     if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publication failed.' }
     & .\scripts\verify-release.ps1
 } finally {
