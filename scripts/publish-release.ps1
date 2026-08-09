@@ -16,8 +16,9 @@ try {
     $tag = "v$versionName"
     $apk = ".\dist\Habitama-$versionName.apk"
     $manifest = '.\dist\version.json'
-    gh release view $tag --repo toshiwd/Habitama *> $null
-    if ($LASTEXITCODE -eq 0) { throw "Release already exists: $tag" }
+    $existingTags = @(gh release list --repo toshiwd/Habitama --limit 100 --json tagName --jq '.[].tagName')
+    if ($LASTEXITCODE -ne 0) { throw 'Could not inspect existing GitHub Releases.' }
+    if ($existingTags -contains $tag) { throw "Release already exists: $tag" }
     gh release create $tag $apk $manifest `
         --repo toshiwd/Habitama `
         --title "Habitama $versionName" `
