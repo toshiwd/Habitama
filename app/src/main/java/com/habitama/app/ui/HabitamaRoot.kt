@@ -1,5 +1,10 @@
 package com.habitama.app.ui
 
+import android.Manifest
+import android.app.TimePickerDialog
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,12 +35,15 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -54,8 +62,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -65,6 +76,28 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.CleaningServices
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.Remove
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.DirectionsWalk
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import androidx.compose.material.icons.automirrored.rounded.ShowChart
+import androidx.compose.material.icons.rounded.Spa
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.WaterDrop
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -78,6 +111,10 @@ import com.habitama.app.data.GrowthStatsEntity
 import com.habitama.app.data.GrowthType
 import com.habitama.app.data.MAX_ACTIVE_GOALS
 import com.habitama.app.domain.MAX_INPUT_VALUE
+import com.habitama.app.domain.JapaneseHolidays
+import com.habitama.app.notifications.ReminderPreferences
+import com.habitama.app.notifications.ReminderScheduler
+import com.habitama.app.notifications.ReminderSettings
 import com.habitama.app.ui.theme.HabitamaAccent
 import com.habitama.app.ui.theme.HabitamaBackground
 import com.habitama.app.ui.theme.HabitamaBlue
@@ -89,6 +126,7 @@ import com.habitama.app.ui.theme.HabitamaRose
 import com.habitama.app.ui.theme.HabitamaSuccess
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.DayOfWeek
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToLong
@@ -101,13 +139,15 @@ private const val ROUTE_CALENDAR = "calendar"
 private const val ROUTE_GROWTH = "growth"
 private const val ROUTE_GOAL_ADD = "goal/add"
 private const val ROUTE_GOAL_EDIT = "goal/edit/{goalId}"
+private const val ROUTE_SETTINGS = "settings"
+private const val ROUTE_GOAL_MANAGEMENT = "settings/goals"
 
 private data class GoalTemplate(val draft: GoalDraft, val subtitle: String)
 
 private val templates = listOf(
-    GoalTemplate(GoalDraft("6,000歩あるく", 6_000, "歩", GrowthType.VITALITY, "👣"), "からだを動かす習慣"),
-    GoalTemplate(GoalDraft("単語を5個おぼえる", 5, "個", GrowthType.INTELLIGENCE, "📖"), "小さく学びを積み重ねる"),
-    GoalTemplate(GoalDraft("10分片づける", 10, "分", GrowthType.DISCIPLINE, "🧹"), "暮らしを整える習慣"),
+    GoalTemplate(GoalDraft("6,000歩あるく", 6_000, "歩", GrowthType.VITALITY, "walk"), "からだを動かす習慣"),
+    GoalTemplate(GoalDraft("単語を5個おぼえる", 5, "個", GrowthType.INTELLIGENCE, "book"), "小さく学びを積み重ねる"),
+    GoalTemplate(GoalDraft("10分片づける", 10, "分", GrowthType.DISCIPLINE, "cln"), "暮らしを整える習慣"),
 )
 
 @Composable
@@ -128,13 +168,11 @@ fun HabitamaRoot(viewModel: HabitamaViewModel = viewModel()) {
             }
         }
         composable(ROUTE_HOME) {
-            MainScreen(title = "ホーム", selected = ROUTE_HOME, onTab = { nav.navigateSingleTop(it) }) { padding ->
+            MainScreen(title = "ホーム", selected = ROUTE_HOME, onTab = { nav.navigateSingleTop(it) }, onSettings = { nav.navigate(ROUTE_SETTINGS) }) { padding ->
                 HomeScreen(
                     state = state,
                     padding = padding,
                     onReport = { nav.navigate(ROUTE_REPORT) },
-                    onAdd = { nav.navigate(ROUTE_GOAL_ADD) },
-                    onEdit = { nav.navigate("goal/edit/$it") },
                 )
             }
         }
@@ -149,14 +187,25 @@ fun HabitamaRoot(viewModel: HabitamaViewModel = viewModel()) {
             }
         }
         composable(ROUTE_CALENDAR) {
-            MainScreen(title = "行動カレンダー", selected = ROUTE_CALENDAR, onTab = { nav.navigateSingleTop(it) }) { padding ->
+            MainScreen(title = "行動カレンダー", selected = ROUTE_CALENDAR, onTab = { nav.navigateSingleTop(it) }, onSettings = { nav.navigate(ROUTE_SETTINGS) }) { padding ->
                 CalendarScreen(state, padding)
             }
         }
         composable(ROUTE_GROWTH) {
-            MainScreen(title = "ハビタマの成長", selected = ROUTE_GROWTH, onTab = { nav.navigateSingleTop(it) }) { padding ->
+            MainScreen(title = "ハビタマの成長", selected = ROUTE_GROWTH, onTab = { nav.navigateSingleTop(it) }, onSettings = { nav.navigate(ROUTE_SETTINGS) }) { padding ->
                 GrowthScreen(state, padding)
             }
+        }
+        composable(ROUTE_SETTINGS) {
+            SettingsScreen(onBack = nav::popBackStack, onGoals = { nav.navigate(ROUTE_GOAL_MANAGEMENT) })
+        }
+        composable(ROUTE_GOAL_MANAGEMENT) {
+            GoalManagementScreen(
+                state = state,
+                onBack = nav::popBackStack,
+                onAdd = { nav.navigate(ROUTE_GOAL_ADD) },
+                onEdit = { nav.navigate("goal/edit/$it") },
+            )
         }
         composable(ROUTE_GOAL_ADD) {
             GoalEditorScreen(
@@ -234,7 +283,7 @@ private fun TemplateCard(template: GoalTemplate, selected: Boolean, onClick: () 
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
     ) {
         Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(template.draft.icon, fontSize = 30.sp)
+            GoalTypeIcon(template.draft.icon, template.draft.growthType, Modifier.size(32.dp), HabitamaPrimaryDark)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(template.draft.title, style = MaterialTheme.typography.titleMedium)
@@ -244,13 +293,13 @@ private fun TemplateCard(template: GoalTemplate, selected: Boolean, onClick: () 
                 Modifier.size(26.dp).border(2.dp, if (selected) HabitamaPrimary else HabitamaLine, CircleShape)
                     .background(if (selected) HabitamaPrimary else Color.Transparent, CircleShape),
                 contentAlignment = Alignment.Center,
-            ) { if (selected) Text("✓", color = Color.White, fontWeight = FontWeight.Bold) }
+            ) { if (selected) Icon(Icons.Rounded.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp)) }
         }
     }
 }
 
 @Composable
-private fun HomeScreen(state: HabitamaUiState, padding: PaddingValues, onReport: () -> Unit, onAdd: () -> Unit, onEdit: (Long) -> Unit) {
+private fun HomeScreen(state: HabitamaUiState, padding: PaddingValues, onReport: () -> Unit) {
     val recordMap = state.todayRecords.associateBy { it.goalId }
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(padding),
@@ -268,14 +317,7 @@ private fun HomeScreen(state: HabitamaUiState, padding: PaddingValues, onReport:
         }
         item { SectionLabel("今日の行動", if (state.todayRecords.isNotEmpty()) "記録済み" else "未報告") }
         items(state.activeGoals, key = { it.id }) { goal ->
-            GoalProgressCard(goal, recordMap[goal.id], onClick = { onEdit(goal.id) })
-        }
-        if (state.activeGoals.size < MAX_ACTIVE_GOALS) {
-            item {
-                OutlinedButton(onClick = onAdd, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = RoundedCornerShape(18.dp)) {
-                    Text("＋ 行動を追加（あと${MAX_ACTIVE_GOALS - state.activeGoals.size}つ）")
-                }
-            }
+            GoalProgressCard(goal, recordMap[goal.id])
         }
         item { GrowthStrip(state.growthStats) }
         if (state.pendingGoals.isNotEmpty()) {
@@ -291,16 +333,16 @@ private fun HomeScreen(state: HabitamaUiState, padding: PaddingValues, onReport:
 }
 
 @Composable
-private fun GoalProgressCard(goal: GoalEntity, record: DailyGoalRecordEntity?, onClick: () -> Unit) {
+private fun GoalProgressCard(goal: GoalEntity, record: DailyGoalRecordEntity?) {
     val percentage = record?.displayPercentage ?: 0
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(3.dp),
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            ProgressRing(percentage, goal.icon)
+            ProgressRing(percentage, goal)
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(goal.title, style = MaterialTheme.typography.titleMedium)
@@ -314,7 +356,6 @@ private fun GoalProgressCard(goal: GoalEntity, record: DailyGoalRecordEntity?, o
                     }
                 }
             }
-            Text("›", fontSize = 28.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -359,13 +400,13 @@ private fun ReportGoalCard(goal: GoalEntity, value: String, onValue: (String) ->
     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(3.dp)) {
         Column(Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(goal.icon, fontSize = 28.sp)
+                GoalTypeIcon(goal.icon, goal.growthType, Modifier.size(30.dp), growthColor(goal.growthType))
                 Spacer(Modifier.width(10.dp))
                 Text(goal.title, style = MaterialTheme.typography.titleMedium, color = growthColor(goal.growthType))
             }
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                RoundAction("−") { onValue((actual - step).coerceAtLeast(0).toString()) }
+                RoundAction(Icons.Rounded.Remove, "減らす") { onValue((actual - step).coerceAtLeast(0).toString()) }
                 OutlinedTextField(
                     value = value,
                     onValueChange = { onValue(it.filter(Char::isDigit).take(9)) },
@@ -375,7 +416,7 @@ private fun ReportGoalCard(goal: GoalEntity, value: String, onValue: (String) ->
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                 )
-                RoundAction("＋") { onValue((actual + step).coerceAtMost(MAX_INPUT_VALUE).toString()) }
+                RoundAction(Icons.Rounded.Add, "増やす") { onValue((actual + step).coerceAtMost(MAX_INPUT_VALUE).toString()) }
             }
             Slider(
                 value = actual.coerceAtMost(max.toLong()).toFloat(),
@@ -411,8 +452,10 @@ private fun ResultScreen(state: HabitamaUiState, onHome: () -> Unit) {
             ) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     state.lastGains.forEach { gain ->
-                        Row(Modifier.fillMaxWidth()) {
-                            Text("${growthIcon(gain.growthType)} ${growthName(gain.growthType)}", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            GrowthIcon(gain.growthType, Modifier.size(22.dp))
+                            Spacer(Modifier.width(9.dp))
+                            Text(growthName(gain.growthType), modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
                             Text(if (gain.points >= 0) "+${gain.points}" else gain.points.toString(), color = growthColor(gain.growthType), fontWeight = FontWeight.Bold)
                         }
                     }
@@ -448,7 +491,11 @@ private fun CalendarScreen(state: HabitamaUiState, padding: PaddingValues) {
             Column(Modifier.padding(18.dp)) {
                 Text("${month.year}年 ${month.monthValue}月", style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(16.dp))
-                Row(Modifier.fillMaxWidth()) { listOf("月", "火", "水", "木", "金", "土", "日").forEach { Text(it, Modifier.weight(1f), textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
+                Row(Modifier.fillMaxWidth()) {
+                    listOf("月", "火", "水", "木", "金", "土", "日").forEachIndexed { index, label ->
+                        Text(label, Modifier.weight(1f), textAlign = TextAlign.Center, color = weekdayHeaderColor(index), fontWeight = FontWeight.SemiBold)
+                    }
+                }
                 Spacer(Modifier.height(10.dp))
                 cells.chunked(7).forEach { week ->
                     Row(Modifier.fillMaxWidth()) {
@@ -473,11 +520,16 @@ private fun CalendarScreen(state: HabitamaUiState, padding: PaddingValues) {
 
 @Composable
 private fun CalendarDay(date: LocalDate, records: List<DailyGoalRecordEntity>, today: Boolean) {
+    val dateColor = when {
+        JapaneseHolidays.isHoliday(date) || date.dayOfWeek == DayOfWeek.SUNDAY -> Color(0xFFC94F5B)
+        date.dayOfWeek == DayOfWeek.SATURDAY -> HabitamaBlue
+        else -> MaterialTheme.colorScheme.onSurface
+    }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.size(30.dp).background(if (today) HabitamaPrimary.copy(alpha = .16f) else Color.Transparent, CircleShape),
             contentAlignment = Alignment.Center,
-        ) { Text(date.dayOfMonth.toString(), fontWeight = if (today) FontWeight.Bold else FontWeight.Normal) }
+        ) { Text(date.dayOfMonth.toString(), color = dateColor, fontSize = 14.sp, fontWeight = if (today) FontWeight.Bold else FontWeight.Normal) }
         if (records.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) { records.take(3).forEach { Box(Modifier.size(4.dp).background(if (it.displayPercentage >= 100) HabitamaPrimary else HabitamaLeaf, CircleShape)) } }
     }
 }
@@ -485,7 +537,16 @@ private fun CalendarDay(date: LocalDate, records: List<DailyGoalRecordEntity>, t
 @Composable
 private fun HistoryRow(day: HistoryDay) {
     Row(Modifier.fillMaxWidth().heightIn(min = 58.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(formatDate(day.date), Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+        Text(
+            formatDate(day.date),
+            Modifier.weight(1f),
+            color = when {
+                JapaneseHolidays.isHoliday(day.date) || day.date.dayOfWeek == DayOfWeek.SUNDAY -> Color(0xFFC94F5B)
+                day.date.dayOfWeek == DayOfWeek.SATURDAY -> HabitamaBlue
+                else -> MaterialTheme.colorScheme.onSurface
+            },
+            fontWeight = FontWeight.SemiBold,
+        )
         if (day.records.isEmpty()) Text("記録なし", color = MaterialTheme.colorScheme.onSurfaceVariant)
         else Text("${day.records.size}件  +${day.records.sumOf { it.energyEarned }} pt", color = HabitamaSuccess, fontWeight = FontWeight.Bold)
     }
@@ -524,10 +585,172 @@ private fun GrowthScreen(state: HabitamaUiState, padding: PaddingValues) {
 }
 
 @Composable
+private fun SettingsScreen(onBack: () -> Unit, onGoals: () -> Unit) {
+    val context = LocalContext.current
+    val preferences = remember { ReminderPreferences(context) }
+    var settings by remember { mutableStateOf(preferences.load()) }
+    fun persist(next: ReminderSettings) {
+        settings = next
+        preferences.save(next)
+        ReminderScheduler.scheduleAll(context, next)
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) persist(settings.copy(dailyEnabled = false, monthlyReviewEnabled = false))
+    }
+
+    ScreenShell("設定", onBack) { padding ->
+        Column(
+            Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Spacer(Modifier.height(8.dp))
+            Text("習慣の設定", style = MaterialTheme.typography.titleLarge)
+            SettingsLinkCard(
+                icon = Icons.Rounded.Tune,
+                title = "行動目標の管理",
+                subtitle = "追加・変更はここから行います",
+                onClick = onGoals,
+            )
+            Text("お知らせ", style = MaterialTheme.typography.titleLarge)
+            Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column {
+                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Notifications, contentDescription = null, tint = HabitamaPrimary)
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("毎日の報告リマインダー", fontWeight = FontWeight.Bold)
+                            Text("指定した時刻に入力を促します", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                        }
+                        Switch(
+                            checked = settings.dailyEnabled,
+                            onCheckedChange = { checked ->
+                                val next = settings.copy(dailyEnabled = checked)
+                                persist(next)
+                                if (checked && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                            },
+                        )
+                    }
+                    HorizontalDivider(color = HabitamaLine)
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 64.dp).clickable(enabled = settings.dailyEnabled) {
+                            TimePickerDialog(
+                                context,
+                                { _, hour, minute -> persist(settings.copy(dailyHour = hour, dailyMinute = minute)) },
+                                settings.dailyHour,
+                                settings.dailyMinute,
+                                true,
+                            ).show()
+                        }.padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Rounded.Schedule, contentDescription = null, tint = if (settings.dailyEnabled) HabitamaPrimary else HabitamaLine)
+                        Spacer(Modifier.width(14.dp))
+                        Text("通知時刻", Modifier.weight(1f), color = if (settings.dailyEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(String.format(Locale.JAPANESE, "%02d:%02d", settings.dailyHour, settings.dailyMinute), fontWeight = FontWeight.Bold, color = HabitamaPrimary)
+                    }
+                }
+            }
+            Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Edit, contentDescription = null, tint = HabitamaAccent)
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("月1回の目標見直し", fontWeight = FontWeight.Bold)
+                        Text("毎月1日 10:00にお知らせ", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Switch(
+                        checked = settings.monthlyReviewEnabled,
+                        onCheckedChange = { checked ->
+                            val next = settings.copy(monthlyReviewEnabled = checked)
+                            persist(next)
+                            if (checked && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        },
+                    )
+                }
+            }
+            Text("通知は端末の省電力設定により、指定時刻から多少遅れる場合があります。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun GoalManagementScreen(
+    state: HabitamaUiState,
+    onBack: () -> Unit,
+    onAdd: () -> Unit,
+    onEdit: (Long) -> Unit,
+) {
+    ScreenShell("行動目標の管理", onBack) { padding ->
+        LazyColumn(
+            Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                Text("目標は頻繁に変えず、月に一度を目安に見直しましょう。変更内容は翌日から反映されます。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            items(state.activeGoals, key = { it.id }) { goal ->
+                Card(
+                    modifier = Modifier.fillMaxWidth().clickable { onEdit(goal.id) },
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                ) {
+                    Row(Modifier.fillMaxWidth().padding(17.dp), verticalAlignment = Alignment.CenterVertically) {
+                        GoalTypeIcon(goal.icon, goal.growthType, Modifier.size(30.dp), growthColor(goal.growthType))
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(goal.title, fontWeight = FontWeight.Bold)
+                            Text("${goal.targetValue}${goal.unit}・${growthName(goal.growthType)}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Icon(Icons.Rounded.Edit, contentDescription = "変更", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            if (state.activeGoals.size < MAX_ACTIVE_GOALS) {
+                item {
+                    OutlinedButton(onClick = onAdd, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = RoundedCornerShape(18.dp)) {
+                        Icon(Icons.Rounded.Add, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("行動を追加（あと${MAX_ACTIVE_GOALS - state.activeGoals.size}つ）")
+                    }
+                }
+            }
+            if (state.pendingGoals.isNotEmpty()) {
+                item { Text("明日から変更予定：${state.pendingGoals.joinToString { it.title }}", color = HabitamaPrimaryDark) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsLinkCard(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(17.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = HabitamaPrimary)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, fontWeight = FontWeight.Bold)
+                Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+            }
+            Icon(Icons.Rounded.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
 private fun StatCard(type: String, points: Int) {
     Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(growthIcon(type), fontSize = 28.sp)
+            GrowthIcon(type, Modifier.size(30.dp))
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(growthName(type), fontWeight = FontWeight.Bold)
@@ -567,7 +790,9 @@ internal fun GoalEditorScreen(
                     OutlinedButton(onClick = {
                         title = template.draft.title; target = template.draft.targetValue.toString(); unit = template.draft.unit
                         type = template.draft.growthType; icon = template.draft.icon; onClearError()
-                    }, contentPadding = PaddingValues(horizontal = 12.dp), modifier = Modifier.heightIn(min = 48.dp)) { Text(template.draft.icon) }
+                    }, contentPadding = PaddingValues(horizontal = 12.dp), modifier = Modifier.heightIn(min = 48.dp).testTag("template_${template.draft.icon}")) {
+                        GoalTypeIcon(template.draft.icon, template.draft.growthType, Modifier.size(24.dp), growthColor(template.draft.growthType))
+                    }
                 }
             }
             OutlinedTextField(title, { title = it.take(40); onClearError() }, Modifier.fillMaxWidth().testTag("goal_title"), label = { Text("行動の名前") }, singleLine = true)
@@ -580,11 +805,11 @@ internal fun GoalEditorScreen(
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 50.dp).clip(RoundedCornerShape(14.dp))
                         .background(if (type == candidate) growthColor(candidate).copy(alpha = .12f) else Color.Transparent)
-                        .clickable { type = candidate; icon = growthIcon(candidate) }.padding(horizontal = 12.dp),
+                        .clickable { type = candidate; icon = growthToken(candidate) }.padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(growthIcon(candidate)); Spacer(Modifier.width(10.dp)); Text(growthName(candidate), Modifier.weight(1f))
-                    if (type == candidate) Text("✓", color = growthColor(candidate), fontWeight = FontWeight.Bold)
+                    GrowthIcon(candidate, Modifier.size(24.dp)); Spacer(Modifier.width(10.dp)); Text(growthName(candidate), Modifier.weight(1f))
+                    if (type == candidate) Icon(Icons.Rounded.Check, contentDescription = null, tint = growthColor(candidate), modifier = Modifier.size(20.dp))
                 }
             }
             ErrorText(errorMessage)
@@ -595,11 +820,17 @@ internal fun GoalEditorScreen(
 }
 
 @Composable
-private fun MainScreen(title: String, selected: String, onTab: (String) -> Unit, content: @Composable (PaddingValues) -> Unit) {
+private fun MainScreen(
+    title: String,
+    selected: String,
+    onTab: (String) -> Unit,
+    onSettings: () -> Unit,
+    content: @Composable (PaddingValues) -> Unit,
+) {
     BotanicalBackground {
         Scaffold(
             containerColor = Color.Transparent,
-            topBar = { AppHeader(title) },
+            topBar = { AppHeader(title, onSettings) },
             bottomBar = { BottomBar(selected, onTab) },
             content = content,
         )
@@ -613,7 +844,9 @@ private fun ScreenShell(title: String, onBack: (() -> Unit)?, content: @Composab
             containerColor = Color.Transparent,
             topBar = {
                 Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (onBack != null) TextButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) { Text("‹ 戻る") } else Spacer(Modifier.width(12.dp))
+                    if (onBack != null) {
+                        IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "戻る") }
+                    } else Spacer(Modifier.width(12.dp))
                     Text(title, style = MaterialTheme.typography.titleLarge)
                 }
             },
@@ -623,11 +856,14 @@ private fun ScreenShell(title: String, onBack: (() -> Unit)?, content: @Composab
 }
 
 @Composable
-private fun AppHeader(title: String) {
+private fun AppHeader(title: String, onSettings: () -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("🌱", fontSize = 26.sp)
+        Icon(Icons.Rounded.Spa, contentDescription = null, tint = HabitamaPrimary, modifier = Modifier.size(30.dp))
         Spacer(Modifier.width(10.dp))
-        Text(title, style = MaterialTheme.typography.titleLarge)
+        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+        IconButton(onClick = onSettings, modifier = Modifier.size(48.dp)) {
+            Icon(Icons.Rounded.Settings, contentDescription = "設定", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
@@ -638,12 +874,16 @@ private fun BottomBar(selected: String, onTab: (String) -> Unit) {
         horizontalArrangement = Arrangement.SpaceAround,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        listOf(Triple(ROUTE_HOME, "⌂", "ホーム"), Triple(ROUTE_CALENDAR, "▦", "記録"), Triple(ROUTE_GROWTH, "♢", "成長")).forEach { (route, icon, label) ->
+        listOf(
+            Triple(ROUTE_HOME, Icons.Rounded.Home, "ホーム"),
+            Triple(ROUTE_CALENDAR, Icons.Rounded.CalendarMonth, "記録"),
+            Triple(ROUTE_GROWTH, Icons.AutoMirrored.Rounded.ShowChart, "成長"),
+        ).forEach { (route, icon, label) ->
             Column(
                 Modifier.weight(1f).heightIn(min = 54.dp).clickable { onTab(route) },
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
             ) {
-                Text(icon, fontSize = 22.sp, color = if (selected == route) HabitamaPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(icon, contentDescription = null, modifier = Modifier.size(23.dp), tint = if (selected == route) HabitamaPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(label, fontSize = 12.sp, fontWeight = if (selected == route) FontWeight.Bold else FontWeight.Normal, color = if (selected == route) HabitamaPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -668,13 +908,13 @@ private fun BotanicalBackground(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun ProgressRing(percentage: Int, icon: String) {
+private fun ProgressRing(percentage: Int, goal: GoalEntity) {
     Box(Modifier.size(66.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             drawArc(HabitamaLine, -90f, 360f, false, style = Stroke(7.dp.toPx(), cap = StrokeCap.Round))
             drawArc(HabitamaPrimary, -90f, (percentage.coerceIn(0, 100) * 3.6f), false, style = Stroke(7.dp.toPx(), cap = StrokeCap.Round))
         }
-        Text(icon, fontSize = 25.sp)
+        GoalTypeIcon(goal.icon, goal.growthType, Modifier.size(28.dp), growthColor(goal.growthType))
     }
 }
 
@@ -687,7 +927,7 @@ private fun GrowthStrip(stats: GrowthStatsEntity) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 GrowthType.all.forEach { type ->
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(growthIcon(type), fontSize = 22.sp)
+                        GrowthIcon(type, Modifier.size(23.dp))
                         Text(growthName(type), fontSize = 10.sp)
                         Text(stats.valueOf(type).toString(), fontSize = 12.sp, color = growthColor(type), fontWeight = FontWeight.Bold)
                     }
@@ -725,28 +965,34 @@ private fun PrimaryButton(text: String, enabled: Boolean, tag: String, onClick: 
 }
 
 @Composable
-private fun RoundAction(text: String, onClick: () -> Unit) {
-    OutlinedButton(onClick = onClick, modifier = Modifier.size(48.dp), shape = CircleShape, contentPadding = PaddingValues(0.dp)) { Text(text, fontSize = 22.sp) }
+private fun RoundAction(icon: ImageVector, description: String, onClick: () -> Unit) {
+    OutlinedButton(onClick = onClick, modifier = Modifier.size(48.dp), shape = CircleShape, contentPadding = PaddingValues(0.dp)) {
+        Icon(icon, contentDescription = description, modifier = Modifier.size(24.dp))
+    }
 }
 
 @Composable
 private fun EggBadge(points: Int, large: Boolean = false) {
     val size = if (large) 76.dp else 54.dp
     Box(Modifier.size(size).background(Color(0xFFFFE7B8), CircleShape).border(1.dp, Color(0xFFF2C77E), CircleShape), contentAlignment = Alignment.Center) {
-        Text("🥚", fontSize = if (large) 42.sp else 29.sp, modifier = Modifier.semantics { contentDescription = "ハビタマ 累積$points ポイント" })
+        HabitamaEgg(Modifier.size(if (large) 48.dp else 34.dp).semantics { contentDescription = "ハビタマ 累積$points ポイント" })
     }
 }
 
 @Composable
 private fun EggGlow() {
-    Box(Modifier.size(150.dp).background(Brush.radialGradient(listOf(Color(0xFFFFD879), Color.Transparent)), CircleShape), contentAlignment = Alignment.Center) { Text("🥚", fontSize = 78.sp) }
+    Box(Modifier.size(150.dp).background(Brush.radialGradient(listOf(Color(0xFFFFD879), Color.Transparent)), CircleShape), contentAlignment = Alignment.Center) {
+        HabitamaEgg(Modifier.size(82.dp))
+    }
 }
 
 @Composable
 private fun EncouragementCard() {
     Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFF2F5E8)), shape = RoundedCornerShape(18.dp)) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("🌿", fontSize = 25.sp); Spacer(Modifier.width(10.dp)); Text("いい感じだよ！\nその調子で続けていこう。", color = HabitamaPrimaryDark)
+            Icon(Icons.Rounded.Spa, contentDescription = null, tint = HabitamaSuccess, modifier = Modifier.size(28.dp))
+            Spacer(Modifier.width(10.dp))
+            Text("いい感じだよ！\nその調子で続けていこう。", color = HabitamaPrimaryDark)
         }
     }
 }
@@ -771,12 +1017,61 @@ private fun growthName(type: String): String = when (type) {
     else -> "規律"
 }
 
-private fun growthIcon(type: String): String = when (type) {
-    GrowthType.VITALITY -> "♥"
-    GrowthType.INTELLIGENCE -> "📘"
-    GrowthType.BEAUTY -> "✦"
-    GrowthType.RECOVERY -> "💧"
-    else -> "🛡"
+@Composable
+private fun GrowthIcon(type: String, modifier: Modifier = Modifier) {
+    Icon(growthImage(type), contentDescription = growthName(type), modifier = modifier, tint = growthColor(type))
+}
+
+@Composable
+private fun GoalTypeIcon(token: String, growthType: String, modifier: Modifier = Modifier, tint: Color = growthColor(growthType)) {
+    val image = when (token) {
+        "walk", "👣" -> Icons.AutoMirrored.Rounded.DirectionsWalk
+        "book", "📖" -> Icons.AutoMirrored.Rounded.MenuBook
+        "cln", "clean", "🧹" -> Icons.Rounded.CleaningServices
+        else -> growthImage(growthType)
+    }
+    Icon(image, contentDescription = null, modifier = modifier, tint = tint)
+}
+
+private fun growthImage(type: String): ImageVector = when (type) {
+    GrowthType.VITALITY -> Icons.Rounded.Favorite
+    GrowthType.INTELLIGENCE -> Icons.AutoMirrored.Rounded.MenuBook
+    GrowthType.BEAUTY -> Icons.Rounded.AutoAwesome
+    GrowthType.RECOVERY -> Icons.Rounded.WaterDrop
+    else -> Icons.Rounded.Shield
+}
+
+private fun growthToken(type: String): String = when (type) {
+    GrowthType.VITALITY -> "vitality"
+    GrowthType.INTELLIGENCE -> "intelligence"
+    GrowthType.BEAUTY -> "beauty"
+    GrowthType.RECOVERY -> "recovery"
+    else -> "discipline"
+}
+
+@Composable
+private fun HabitamaEgg(modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val egg = Path().apply {
+            moveTo(size.width * .5f, size.height * .05f)
+            cubicTo(size.width * .28f, size.height * .08f, size.width * .12f, size.height * .48f, size.width * .16f, size.height * .7f)
+            cubicTo(size.width * .2f, size.height * .94f, size.width * .8f, size.height * .94f, size.width * .84f, size.height * .7f)
+            cubicTo(size.width * .88f, size.height * .48f, size.width * .72f, size.height * .08f, size.width * .5f, size.height * .05f)
+            close()
+        }
+        drawPath(egg, Color(0xFFF3A05A))
+        drawOval(Color.White.copy(alpha = .42f), topLeft = Offset(size.width * .31f, size.height * .23f), size = androidx.compose.ui.geometry.Size(size.width * .16f, size.height * .28f))
+        drawCircle(Color(0xFFC96F55), radius = size.minDimension * .035f, center = Offset(size.width * .62f, size.height * .67f))
+        drawCircle(Color(0xFFC96F55), radius = size.minDimension * .025f, center = Offset(size.width * .72f, size.height * .74f))
+        drawCircle(Color(0xFFC96F55), radius = size.minDimension * .022f, center = Offset(size.width * .45f, size.height * .78f))
+    }
+}
+
+@Composable
+private fun weekdayHeaderColor(index: Int): Color = when (index) {
+    5 -> HabitamaBlue
+    6 -> Color(0xFFC94F5B)
+    else -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
 private fun growthColor(type: String): Color = when (type) {

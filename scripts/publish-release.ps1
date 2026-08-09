@@ -22,7 +22,7 @@ try {
     gh release create $tag $apk $manifest `
         --repo toshiwd/Habitama `
         --title "Habitama $versionName" `
-        --notes "Warm botanical UI, up to three daily actions, five growth stats, daily report summary, and calendar history."
+        --notes "Refined Japanese typography and Material icons, protected goal-management flow, daily and monthly reminders, and Japanese weekend/holiday calendar colors."
     if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publication failed.' }
     & .\scripts\verify-release.ps1
 } finally {

@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.room.Room
 import com.habitama.app.data.HabitamaDatabase
 import com.habitama.app.data.HabitamaRepository
+import com.habitama.app.notifications.NotificationChannels
+import com.habitama.app.notifications.ReminderScheduler
 
 class HabitamaApplication : Application() {
     lateinit var repository: HabitamaRepository
@@ -17,5 +19,7 @@ class HabitamaApplication : Application() {
             "habitama.db",
         ).addMigrations(HabitamaDatabase.MIGRATION_1_2).build()
         repository = HabitamaRepository(database)
+        NotificationChannels.create(this)
+        ReminderScheduler.scheduleAll(this)
     }
 }

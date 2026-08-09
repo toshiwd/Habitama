@@ -33,7 +33,7 @@ class GoalEditorScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("📖").performClick()
+        composeRule.onNodeWithTag("template_book").performClick()
         composeRule.onNodeWithTag("goal_title").assertTextContains("単語を5個おぼえる")
         composeRule.onNodeWithTag("goal_target").assertTextContains("5")
         composeRule.onNodeWithTag("goal_unit").assertTextContains("個")

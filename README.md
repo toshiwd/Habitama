@@ -2,12 +2,14 @@
 
 ハビタマは、結果目標ではなく「今日できる行動」を記録し、できた分を成長へ変換するAndroidアプリです。
 
-v0.2では、最大3件の行動、まとめて日次報告、部分達成・超過評価、5つの成長ステータス、月間カレンダー、端末内保存を提供します。未報告日は失敗として扱いません。
+v0.3では、最大3件の行動、まとめて日次報告、5つの成長ステータス、土日祝日対応カレンダー、毎日の報告通知、月1回の目標見直し通知を提供します。未報告日は失敗として扱いません。
 
 ## 技術構成
 
 - Android / Kotlin / Jetpack Compose / Material 3
 - Room / Repository / ViewModel / StateFlow
+- 日本語表示はAndroid標準のNoto系サンセリフを使用
+- UIアイコンはApache License 2.0のMaterial Iconsを使用
 - `applicationId`: `com.habitama.app`
 - `minSdk 26` / `targetSdk 35`
 - JDK 17以上、Android SDK 35
@@ -44,10 +46,10 @@ $env:ANDROID_HOME="$env:LOCALAPPDATA\Android\Sdk"
 
 成果物はGit管理外の`dist`に生成されます。
 
-- `Habitama-0.2.0.apk`
+- `Habitama-0.3.0.apk`
 - `version.json`
-- `Habitama-0.2.0.sha256`
-- `Habitama-0.2.0-cert.txt`
+- `Habitama-0.3.0.sha256`
+- `Habitama-0.3.0-cert.txt`
 
 ## GitHub Release
 
@@ -58,6 +60,6 @@ $env:ANDROID_HOME="$env:LOCALAPPDATA\Android\Sdk"
 .\scripts\verify-release.ps1
 ```
 
-公開先は[`toshiwd/Habitama`](https://github.com/toshiwd/Habitama)、今回のタグは`v0.2.0`です。アプリ内更新確認はまだ含みません。
+公開先は[`toshiwd/Habitama`](https://github.com/toshiwd/Habitama)、今回のタグは`v0.3.0`です。アプリ内更新確認はまだ含みません。
 
-詳細仕様は[開発仕様書 v0.3](docs/ハビタマ_Androidアプリ開発仕様書_v0.3.md)を参照してください。v0.2仕様は初版の履歴として保持しています。
+詳細仕様は[開発仕様書 v0.4](docs/ハビタマ_Androidアプリ開発仕様書_v0.4.md)を参照してください。旧仕様は履歴として保持しています。
