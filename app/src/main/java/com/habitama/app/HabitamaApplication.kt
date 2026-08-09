@@ -15,7 +15,7 @@ class HabitamaApplication : Application() {
             applicationContext,
             HabitamaDatabase::class.java,
             "habitama.db",
-        ).build()
+        ).addMigrations(HabitamaDatabase.MIGRATION_1_2).build()
         repository = HabitamaRepository(database)
     }
 }

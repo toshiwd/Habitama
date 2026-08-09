@@ -2,7 +2,7 @@
 
 ハビタマは、結果目標ではなく「今日できる行動」を記録し、できた分を成長へ変換するAndroidアプリです。
 
-Phase 0では、目標1件、当日の手入力、部分達成・超過評価、累積エネルギー、直近7日履歴、端末内保存を提供します。未報告日は失敗として扱いません。
+v0.2では、最大3件の行動、まとめて日次報告、部分達成・超過評価、5つの成長ステータス、月間カレンダー、端末内保存を提供します。未報告日は失敗として扱いません。
 
 ## 技術構成
 
@@ -44,10 +44,10 @@ $env:ANDROID_HOME="$env:LOCALAPPDATA\Android\Sdk"
 
 成果物はGit管理外の`dist`に生成されます。
 
-- `Habitama-0.1.0.apk`
+- `Habitama-0.2.0.apk`
 - `version.json`
-- `Habitama-0.1.0.sha256`
-- `Habitama-0.1.0-cert.txt`
+- `Habitama-0.2.0.sha256`
+- `Habitama-0.2.0-cert.txt`
 
 ## GitHub Release
 
@@ -58,6 +58,6 @@ $env:ANDROID_HOME="$env:LOCALAPPDATA\Android\Sdk"
 .\scripts\verify-release.ps1
 ```
 
-公開先は[`toshiwd/Habitama`](https://github.com/toshiwd/Habitama)、タグは`v0.1.0`です。アプリ内更新確認はPhase 0には含みません。
+公開先は[`toshiwd/Habitama`](https://github.com/toshiwd/Habitama)、今回のタグは`v0.2.0`です。アプリ内更新確認はまだ含みません。
 
-詳細仕様は[開発仕様書 v0.2](docs/ハビタマ_Androidアプリ開発仕様書_v0.2.md)を参照してください。
+詳細仕様は[開発仕様書 v0.3](docs/ハビタマ_Androidアプリ開発仕様書_v0.3.md)を参照してください。v0.2仕様は初版の履歴として保持しています。

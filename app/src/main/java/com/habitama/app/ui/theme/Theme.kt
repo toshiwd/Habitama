@@ -1,32 +1,55 @@
 package com.habitama.app.ui.theme
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 
-val HabitamaBackground = Color(0xFFF7F8FA)
-val HabitamaText = Color(0xFF202124)
-val HabitamaPrimary = Color(0xFF2374E1)
-val HabitamaSuccess = Color(0xFF36A269)
-val HabitamaAccent = Color(0xFFF3A712)
+val HabitamaBackground = Color(0xFFFFF9EE)
+val HabitamaSurface = Color(0xFFFFFCF6)
+val HabitamaText = Color(0xFF30251F)
+val HabitamaPrimary = Color(0xFF2F968A)
+val HabitamaPrimaryDark = Color(0xFF1F746A)
+val HabitamaSuccess = Color(0xFF5D9B70)
+val HabitamaAccent = Color(0xFFE8903B)
+val HabitamaLine = Color(0xFFE4D8C5)
+val HabitamaLeaf = Color(0xFFB9CFAB)
+val HabitamaRose = Color(0xFFE87582)
+val HabitamaBlue = Color(0xFF5D91C8)
 
 private val HabitamaColors = lightColorScheme(
     primary = HabitamaPrimary,
     onPrimary = Color.White,
+    primaryContainer = Color(0xFFDCEFEA),
+    onPrimaryContainer = HabitamaPrimaryDark,
     secondary = HabitamaSuccess,
     tertiary = HabitamaAccent,
     background = HabitamaBackground,
     onBackground = HabitamaText,
-    surface = Color.White,
+    surface = HabitamaSurface,
     onSurface = HabitamaText,
-    surfaceVariant = Color(0xFFECEFF3),
+    surfaceVariant = Color(0xFFF3EDDF),
+    onSurfaceVariant = Color(0xFF75695E),
+    outline = HabitamaLine,
+)
+
+private val HabitamaTypography = Typography(
+    headlineLarge = TextStyle(fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, fontSize = 30.sp, lineHeight = 38.sp),
+    headlineMedium = TextStyle(fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, fontSize = 25.sp, lineHeight = 32.sp),
+    headlineSmall = TextStyle(fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, fontSize = 21.sp, lineHeight = 28.sp),
+    titleLarge = TextStyle(fontWeight = FontWeight.Bold, fontSize = 20.sp, lineHeight = 28.sp),
+    titleMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 16.sp, lineHeight = 23.sp),
+    bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 24.sp),
+    bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 21.sp),
+    labelLarge = TextStyle(fontWeight = FontWeight.Bold, fontSize = 14.sp),
 )
 
 @Composable
 fun HabitamaTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = HabitamaColors,
-        content = content,
-    )
+    MaterialTheme(colorScheme = HabitamaColors, typography = HabitamaTypography, content = content)
 }

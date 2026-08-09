@@ -7,6 +7,8 @@ import com.habitama.app.HabitamaApplication
 import com.habitama.app.data.DailyGoalRecordEntity
 import com.habitama.app.data.GoalDraft
 import com.habitama.app.data.GoalEntity
+import com.habitama.app.data.GoalGain
+import com.habitama.app.data.GrowthStatsEntity
 import java.time.LocalDate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,17 +19,20 @@ import kotlinx.coroutines.launch
 
 data class HistoryDay(
     val date: LocalDate,
-    val record: DailyGoalRecordEntity?,
+    val records: List<DailyGoalRecordEntity>,
 )
 
 data class HabitamaUiState(
     val isLoading: Boolean = true,
     val today: LocalDate = LocalDate.now(),
-    val activeGoal: GoalEntity? = null,
-    val pendingGoal: GoalEntity? = null,
-    val todayRecord: DailyGoalRecordEntity? = null,
+    val activeGoals: List<GoalEntity> = emptyList(),
+    val pendingGoals: List<GoalEntity> = emptyList(),
+    val todayRecords: List<DailyGoalRecordEntity> = emptyList(),
     val totalEnergy: Int = 0,
+    val growthStats: GrowthStatsEntity = GrowthStatsEntity(),
     val history: List<HistoryDay> = emptyList(),
+    val lastGains: List<GoalGain> = emptyList(),
+    val lastEarned: Int = 0,
     val errorMessage: String? = null,
 )
 
@@ -40,24 +45,23 @@ class HabitamaViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             repository.observeDashboard()
                 .catch { error ->
-                    _state.update {
-                        it.copy(isLoading = false, errorMessage = error.message ?: "データを読み込めませんでした")
-                    }
+                    _state.update { it.copy(isLoading = false, errorMessage = error.message ?: "データを読み込めませんでした") }
                 }
                 .collect { data ->
-                    val recordByDate = data.records.associateBy { it.date }
-                    val history = (0L..6L).map { offset ->
+                    val byDate = data.records.groupBy { it.date }
+                    val history = (0L..41L).map { offset ->
                         val date = data.today.minusDays(offset)
-                        HistoryDay(date, recordByDate[date.toString()])
+                        HistoryDay(date, byDate[date.toString()].orEmpty())
                     }
                     _state.update {
                         it.copy(
                             isLoading = false,
                             today = data.today,
-                            activeGoal = data.activeGoal,
-                            pendingGoal = data.pendingGoal,
-                            todayRecord = data.todayRecord,
+                            activeGoals = data.activeGoals,
+                            pendingGoals = data.pendingGoals,
+                            todayRecords = data.todayRecords,
                             totalEnergy = data.totalEnergy,
+                            growthStats = data.growthStats.copy(totalPoints = data.totalEnergy),
                             history = history,
                         )
                     }
@@ -65,22 +69,22 @@ class HabitamaViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun createGoal(title: String, targetValue: Long, unit: String, onSuccess: () -> Unit) {
-        launchAction(onSuccess) {
-            repository.createInitialGoal(GoalDraft(title, targetValue, unit))
-        }
+    fun createInitialGoals(drafts: List<GoalDraft>, onSuccess: () -> Unit) = launchAction(onSuccess) {
+        repository.createInitialGoals(drafts)
     }
 
-    fun scheduleGoalUpdate(title: String, targetValue: Long, unit: String, onSuccess: () -> Unit) {
-        launchAction(onSuccess) {
-            repository.scheduleGoalUpdate(GoalDraft(title, targetValue, unit))
-        }
+    fun addGoal(draft: GoalDraft, onSuccess: () -> Unit) = launchAction(onSuccess) {
+        repository.addGoal(draft)
     }
 
-    fun saveTodayRecord(actualValue: Long, onSuccess: () -> Unit) {
-        launchAction(onSuccess) {
-            val record = repository.saveTodayRecord(actualValue)
-            _state.update { it.copy(todayRecord = record) }
+    fun scheduleGoalUpdate(goalId: Long, draft: GoalDraft, onSuccess: () -> Unit) = launchAction(onSuccess) {
+        repository.scheduleGoalUpdate(goalId, draft)
+    }
+
+    fun saveTodayRecords(actualValues: Map<Long, Long>, onSuccess: () -> Unit) = launchAction(onSuccess) {
+        val result = repository.saveTodayRecords(actualValues)
+        _state.update {
+            it.copy(todayRecords = result.records, lastGains = result.gains, lastEarned = result.totalEarned)
         }
     }
 
@@ -93,11 +97,7 @@ class HabitamaViewModel(application: Application) : AndroidViewModel(application
             _state.update { it.copy(errorMessage = null) }
             runCatching { action() }
                 .onSuccess { onSuccess() }
-                .onFailure { error ->
-                    _state.update {
-                        it.copy(errorMessage = error.message ?: "処理を完了できませんでした")
-                    }
-                }
+                .onFailure { error -> _state.update { it.copy(errorMessage = error.message ?: "処理を完了できませんでした") } }
         }
     }
 }
