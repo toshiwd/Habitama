@@ -673,6 +673,8 @@ private fun SettingsScreen(onBack: () -> Unit, onGoals: () -> Unit) {
                 }
             }
             Text("通知は端末の省電力設定により、指定時刻から多少遅れる場合があります。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+            Text("アプリ", style = MaterialTheme.typography.titleLarge)
+            AppUpdateCard()
             Spacer(Modifier.height(24.dp))
         }
     }

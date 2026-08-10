@@ -2,7 +2,9 @@
 
 ハビタマは、結果目標ではなく「今日できる行動」を記録し、できた分を成長へ変換するAndroidアプリです。
 
-v0.3では、最大3件の行動、まとめて日次報告、5つの成長ステータス、土日祝日対応カレンダー、毎日の報告通知、月1回の目標見直し通知を提供します。未報告日は失敗として扱いません。
+v0.4では、最大3件の行動、まとめて日次報告、5つの成長ステータス、土日祝日対応カレンダー、毎日の報告通知、月1回の目標見直し通知、アプリ内更新を提供します。未報告日は失敗として扱いません。
+
+設定画面の「アプリの更新」から最新版を確認できます。更新がある場合はAndroid標準のダウンロード管理でAPKを取得し、SHA-256検証に成功したファイルだけをインストール画面へ渡します。ブラウザでGitHubのリンクを開く必要はありません。
 
 ## 技術構成
 
@@ -46,10 +48,10 @@ $env:ANDROID_HOME="$env:LOCALAPPDATA\Android\Sdk"
 
 成果物はGit管理外の`dist`に生成されます。
 
-- `Habitama-0.3.0.apk`
+- `Habitama-0.4.0.apk`
 - `version.json`
-- `Habitama-0.3.0.sha256`
-- `Habitama-0.3.0-cert.txt`
+- `Habitama-0.4.0.sha256`
+- `Habitama-0.4.0-cert.txt`
 
 ## GitHub Release
 
@@ -60,6 +62,6 @@ $env:ANDROID_HOME="$env:LOCALAPPDATA\Android\Sdk"
 .\scripts\verify-release.ps1
 ```
 
-公開先は[`toshiwd/Habitama`](https://github.com/toshiwd/Habitama)、今回のタグは`v0.3.0`です。アプリ内更新確認はまだ含みません。
+公開先は[`toshiwd/Habitama`](https://github.com/toshiwd/Habitama)、今回のタグは`v0.4.0`です。公開時はAPKと`version.json`を必ず同じReleaseへ添付します。
 
-詳細仕様は[開発仕様書 v0.4](docs/ハビタマ_Androidアプリ開発仕様書_v0.4.md)を参照してください。旧仕様は履歴として保持しています。
+詳細仕様は[開発仕様書 v0.5](docs/ハビタマ_Androidアプリ開発仕様書_v0.5.md)を参照してください。旧仕様は履歴として保持しています。

@@ -9,6 +9,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.TimeUnit
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
@@ -16,9 +17,10 @@ class ReminderReceiverTest {
     @Test
     fun dailyReminderPostsNotificationAfterPermission() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        InstrumentationRegistry.getInstrumentation().uiAutomation
-            .executeShellCommand("pm grant ${context.packageName} ${Manifest.permission.POST_NOTIFICATIONS}")
-            .close()
+        InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(
+            context.packageName,
+            Manifest.permission.POST_NOTIFICATIONS,
+        )
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.cancelAll()
 
@@ -28,6 +30,10 @@ class ReminderReceiverTest {
                 .putExtra(ReminderScheduler.EXTRA_KIND, ReminderScheduler.KIND_DAILY),
         )
 
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2)
+        while (manager.activeNotifications.none { it.id == 4101 } && System.nanoTime() < deadline) {
+            Thread.sleep(50)
+        }
         assertTrue(manager.activeNotifications.any { it.id == 4101 })
         manager.cancelAll()
     }
