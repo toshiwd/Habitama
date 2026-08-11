@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.habitama.app.domain.GoalEvaluationMode
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -78,5 +79,21 @@ class HabitamaRepositoryTest {
         assertEquals(20L, updatedRecord?.targetValueSnapshot)
         assertEquals(10, database.growthStatsDao().get()?.vitality)
         assertEquals(10, database.growthStatsDao().get()?.totalPoints)
+    }
+
+    @Test
+    fun atMostGoalPersistsModeAndUsesLimitEvaluation() = runBlocking {
+        repository.createInitialGoals(
+            listOf(GoalDraft("間食", 200, "kcal", GrowthType.DISCIPLINE, "food", GoalEvaluationMode.AT_MOST)),
+        )
+        val goal = database.goalDao().getActiveGoals("2026-08-10").single()
+
+        repository.saveTodayRecords(mapOf(goal.id to 250))
+        val record = database.recordDao().getRecord("2026-08-10", goal.id)
+
+        assertEquals(GoalEvaluationMode.AT_MOST, goal.evaluationMode)
+        assertEquals(GoalEvaluationMode.AT_MOST, record?.evaluationModeSnapshot)
+        assertEquals(80, record?.displayPercentage)
+        assertEquals(8, record?.energyEarned)
     }
 }

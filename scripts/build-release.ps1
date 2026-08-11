@@ -53,7 +53,7 @@ try {
         versionCode = $versionCode
         apkUrl = "https://github.com/toshiwd/Habitama/releases/download/v$versionName/$apkName"
         sha256 = $sha256
-        releaseNotes = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('5pmC6KiI44Go44K344K544OG44Og44Ki44Kk44Kz44Oz44KS5r+D6Imy6KGo56S644Gr44GX44CB55uu5qiZ5aSJ5pu044KS5L+d5a2Y55u05b6M44GL44KJ5Y+N5pig44GZ44KL44KI44GG44Gr44GX44G+44GX44Gf44CC'))
+        releaseNotes = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('6YGL5YuV44O75YGl5bq344O75a2m44Gz44O75pqu44KJ44GX44O744GK6YeR44Gu44K144Oz44OX44Or44KS6L+95Yqg44GX44CB5Y2Y5L2N44Go44CM5Lul5LiK77yP5Lul5YaF44CN44Gu6YGU5oiQ5pa55rOV44KS6YG444G544KL44KI44GG44Gr44GX44G+44GX44Gf44CC'))
         publishedAt = [DateTimeOffset]::UtcNow.ToString('o')
         minSdk = 26
     } | ConvertTo-Json

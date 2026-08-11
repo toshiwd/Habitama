@@ -9,6 +9,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +36,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -80,18 +82,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.CleaningServices
+import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.Restaurant
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Savings
+import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -99,6 +107,7 @@ import androidx.compose.material.icons.automirrored.rounded.DirectionsWalk
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.automirrored.rounded.ShowChart
 import androidx.compose.material.icons.rounded.Spa
+import androidx.compose.material.icons.rounded.SelfImprovement
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.WaterDrop
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -114,6 +123,7 @@ import com.habitama.app.data.GrowthStatsEntity
 import com.habitama.app.data.GrowthType
 import com.habitama.app.data.MAX_ACTIVE_GOALS
 import com.habitama.app.domain.MAX_INPUT_VALUE
+import com.habitama.app.domain.GoalEvaluationMode
 import com.habitama.app.domain.JapaneseHolidays
 import com.habitama.app.notifications.ReminderPreferences
 import com.habitama.app.notifications.ReminderScheduler
@@ -144,14 +154,6 @@ private const val ROUTE_GOAL_ADD = "goal/add"
 private const val ROUTE_GOAL_EDIT = "goal/edit/{goalId}"
 private const val ROUTE_SETTINGS = "settings"
 private const val ROUTE_GOAL_MANAGEMENT = "settings/goals"
-
-private data class GoalTemplate(val draft: GoalDraft, val subtitle: String)
-
-private val templates = listOf(
-    GoalTemplate(GoalDraft("6,000歩あるく", 6_000, "歩", GrowthType.VITALITY, "walk"), "からだを動かす習慣"),
-    GoalTemplate(GoalDraft("単語を5個おぼえる", 5, "個", GrowthType.INTELLIGENCE, "book"), "小さく学びを積み重ねる"),
-    GoalTemplate(GoalDraft("10分片づける", 10, "分", GrowthType.DISCIPLINE, "cln"), "暮らしを整える習慣"),
-)
 
 @Composable
 fun HabitamaRoot(viewModel: HabitamaViewModel = viewModel()) {
@@ -249,6 +251,7 @@ internal fun OnboardingScreen(errorMessage: String?, onClearError: () -> Unit, o
     val selectedTemplates = remember { mutableStateListOf<Int>() }
     val customGoals = remember { mutableStateListOf<GoalDraft>() }
     var creatingCustomGoal by rememberSaveable { mutableStateOf(false) }
+    var selectedCategory by rememberSaveable { mutableStateOf("recommended") }
     val selectedCount = selectedTemplates.size + customGoals.size
 
     if (creatingCustomGoal) {
@@ -275,15 +278,18 @@ internal fun OnboardingScreen(errorMessage: String?, onClearError: () -> Unit, o
                 Spacer(Modifier.height(28.dp))
                 Text("何を続ける？", style = MaterialTheme.typography.headlineLarge)
                 Spacer(Modifier.height(8.dp))
-                Text("サンプルから選ぶか、自分の行動を作れます", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(28.dp))
-                templates.forEachIndexed { index, template ->
-                    TemplateCard(template, index in selectedTemplates) {
+                Text("サンプルを選ぶだけでも、名前・目標値・単位をまとめて設定できます", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(20.dp))
+                TemplateCategorySelector(selectedCategory) { selectedCategory = it }
+                Spacer(Modifier.height(16.dp))
+                templatesFor(selectedCategory).forEach { template ->
+                    val templateIndex = goalTemplates.indexOf(template)
+                    TemplateCard(template, templateIndex in selectedTemplates) {
                         onClearError()
-                        if (index in selectedTemplates) {
-                            selectedTemplates.remove(index)
+                        if (templateIndex in selectedTemplates) {
+                            selectedTemplates.remove(templateIndex)
                         } else if (selectedCount < MAX_ACTIVE_GOALS) {
-                            selectedTemplates.add(index)
+                            selectedTemplates.add(templateIndex)
                         }
                     }
                     Spacer(Modifier.height(14.dp))
@@ -318,10 +324,27 @@ internal fun OnboardingScreen(errorMessage: String?, onClearError: () -> Unit, o
                 ErrorText(errorMessage)
                 Spacer(Modifier.height(18.dp))
                 PrimaryButton("これで始める", selectedCount > 0, "save_goal") {
-                    onSave(selectedTemplates.sorted().map { templates[it].draft } + customGoals.toList())
+                    onSave(selectedTemplates.sorted().map { goalTemplates[it].draft } + customGoals.toList())
                 }
                 Spacer(Modifier.height(24.dp))
             }
+        }
+    }
+}
+
+@Composable
+private fun TemplateCategorySelector(selectedId: String, onSelect: (String) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        templateCategories.forEach { category ->
+            FilterChip(
+                selected = category.id == selectedId,
+                onClick = { onSelect(category.id) },
+                label = { Text(category.label) },
+                modifier = Modifier.heightIn(min = 48.dp).testTag("category_${category.id}"),
+            )
         }
     }
 }
@@ -340,7 +363,7 @@ private fun CustomGoalDraftCard(draft: GoalDraft, onRemove: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text(draft.title, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "目標 ${draft.targetValue}${draft.unit}",
+                    "目標 ${draft.targetValue}${draft.unit}${if (draft.evaluationMode == GoalEvaluationMode.AT_MOST) "以内" else "以上"}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -367,6 +390,12 @@ private fun TemplateCard(template: GoalTemplate, selected: Boolean, onClick: () 
             Column(Modifier.weight(1f)) {
                 Text(template.draft.title, style = MaterialTheme.typography.titleMedium)
                 Text(template.subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "目標 ${template.draft.targetValue}${template.draft.unit}${if (template.draft.evaluationMode == GoalEvaluationMode.AT_MOST) "以内" else "以上"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = growthColor(template.draft.growthType),
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
             Box(
                 Modifier.size(26.dp).border(2.dp, if (selected) HabitamaPrimary else HabitamaLine, CircleShape)
@@ -427,11 +456,17 @@ private fun GoalProgressCard(goal: GoalEntity, record: DailyGoalRecordEntity?) {
                 Text(goal.title, style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(4.dp))
                 if (record == null) {
-                    Text("目標 ${goal.targetValue}${goal.unit}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "目標 ${goal.targetValue}${goal.unit}${if (goal.evaluationMode == GoalEvaluationMode.AT_MOST) "以内" else "以上"}",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 } else {
                     Row(verticalAlignment = Alignment.Bottom) {
                         Text(record.actualValue.toString(), fontSize = 23.sp, fontWeight = FontWeight.Bold, color = HabitamaPrimaryDark)
-                        Text(" / ${record.targetValueSnapshot}${record.unitSnapshot}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            " / ${record.targetValueSnapshot}${record.unitSnapshot}${if (record.evaluationModeSnapshot == GoalEvaluationMode.AT_MOST) "以内" else "以上"}",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }
@@ -491,7 +526,7 @@ private fun ReportGoalCard(goal: GoalEntity, value: String, onValue: (String) ->
                     onValueChange = { onValue(it.filter(Char::isDigit).take(9)) },
                     modifier = Modifier.weight(1f).testTag("actual_${goal.id}"),
                     textStyle = MaterialTheme.typography.headlineSmall.copy(textAlign = TextAlign.Center),
-                    suffix = { Text("/ ${goal.targetValue}${goal.unit}") },
+                    suffix = { Text("/ ${goal.targetValue}${goal.unit}${if (goal.evaluationMode == GoalEvaluationMode.AT_MOST) "以内" else "以上"}") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                 )
@@ -507,7 +542,14 @@ private fun ReportGoalCard(goal: GoalEntity, value: String, onValue: (String) ->
                     inactiveTrackColor = accent.copy(alpha = .18f),
                 ),
             )
-            Text("達成率 ${(actual * 100 / goal.targetValue).coerceAtLeast(0)}%", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                if (goal.evaluationMode == GoalEvaluationMode.AT_MOST) {
+                    if (actual <= goal.targetValue) "目標以内です" else "${actual - goal.targetValue}${goal.unit}オーバー"
+                } else {
+                    "達成率 ${(actual * 100 / goal.targetValue).coerceAtLeast(0)}%"
+                },
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -658,7 +700,7 @@ private fun GrowthScreen(state: HabitamaUiState, padding: PaddingValues) {
             Spacer(Modifier.height(10.dp))
         }
         Spacer(Modifier.height(12.dp))
-        Text("行動ごとに育つ力が決まります。目標を超えた分は120%までポイントに反映されます。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("行動ごとに育つ力が決まります。「目標以上」は超過分を120%まで反映し、「目標以内」は上限内なら達成です。", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(28.dp))
     }
 }
@@ -786,7 +828,10 @@ private fun GoalManagementScreen(
                         Spacer(Modifier.width(14.dp))
                         Column(Modifier.weight(1f)) {
                             Text(goal.title, fontWeight = FontWeight.Bold)
-                            Text("${goal.targetValue}${goal.unit}・${growthName(goal.growthType)}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                "${goal.targetValue}${goal.unit}${if (goal.evaluationMode == GoalEvaluationMode.AT_MOST) "以内" else "以上"}・${growthName(goal.growthType)}",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                         Icon(Icons.Rounded.Edit, contentDescription = "変更", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -858,6 +903,8 @@ internal fun GoalEditorScreen(
     var unit by remember(initialGoal?.id) { mutableStateOf(initialGoal?.unit.orEmpty()) }
     var type by remember(initialGoal?.id) { mutableStateOf(initialGoal?.growthType ?: GrowthType.DISCIPLINE) }
     var icon by remember(initialGoal?.id) { mutableStateOf(initialGoal?.icon ?: "✓") }
+    var evaluationMode by remember(initialGoal?.id) { mutableStateOf(initialGoal?.evaluationMode ?: GoalEvaluationMode.AT_LEAST) }
+    var templateCategory by rememberSaveable(initialGoal?.id) { mutableStateOf("recommended") }
     val parsed = target.toLongOrNull()
     val valid = title.isNotBlank() && unit.isNotBlank() && parsed != null && parsed in 1..MAX_INPUT_VALUE
     ScreenShell("行動の設定", onBack) { padding ->
@@ -865,14 +912,17 @@ internal fun GoalEditorScreen(
             Spacer(Modifier.height(8.dp))
             Text(heading, style = MaterialTheme.typography.headlineMedium)
             Text(description, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("かんたん設定", style = MaterialTheme.typography.labelLarge)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                templates.forEach { template ->
+            Text("サンプルから入力", style = MaterialTheme.typography.labelLarge)
+            TemplateCategorySelector(templateCategory) { templateCategory = it }
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                templatesFor(templateCategory).forEach { template ->
                     OutlinedButton(onClick = {
                         title = template.draft.title; target = template.draft.targetValue.toString(); unit = template.draft.unit
-                        type = template.draft.growthType; icon = template.draft.icon; onClearError()
+                        type = template.draft.growthType; icon = template.draft.icon; evaluationMode = template.draft.evaluationMode; onClearError()
                     }, contentPadding = PaddingValues(horizontal = 12.dp), modifier = Modifier.heightIn(min = 48.dp).testTag("template_${template.draft.icon}")) {
                         GoalTypeIcon(template.draft.icon, template.draft.growthType, Modifier.size(24.dp), growthColor(template.draft.growthType))
+                        Spacer(Modifier.width(8.dp))
+                        Text(template.draft.title)
                     }
                 }
             }
@@ -881,6 +931,43 @@ internal fun GoalEditorScreen(
                 OutlinedTextField(target, { target = it.filter(Char::isDigit).take(9); onClearError() }, Modifier.weight(1f).testTag("goal_target"), label = { Text("目標値") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
                 OutlinedTextField(unit, { unit = it.take(10); onClearError() }, Modifier.weight(1f).testTag("goal_unit"), label = { Text("単位") }, singleLine = true)
             }
+            Text("よく使う単位", style = MaterialTheme.typography.labelLarge)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                commonGoalUnits.chunked(4).forEach { rowUnits ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        rowUnits.forEach { candidate ->
+                            FilterChip(
+                                selected = unit == candidate,
+                                onClick = { unit = candidate; onClearError() },
+                                label = { Text(candidate) },
+                                modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("unit_$candidate"),
+                            )
+                        }
+                        repeat(4 - rowUnits.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
+            }
+            Text("達成のしかた", style = MaterialTheme.typography.labelLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = evaluationMode == GoalEvaluationMode.AT_LEAST,
+                    onClick = { evaluationMode = GoalEvaluationMode.AT_LEAST },
+                    label = { Text("目標以上をめざす") },
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("mode_at_least"),
+                )
+                FilterChip(
+                    selected = evaluationMode == GoalEvaluationMode.AT_MOST,
+                    onClick = { evaluationMode = GoalEvaluationMode.AT_MOST },
+                    label = { Text("目標以内におさめる") },
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("mode_at_most"),
+                )
+            }
+            Text(
+                if (evaluationMode == GoalEvaluationMode.AT_MOST) "入力した実績が目標値以下なら達成です。超えた場合は割合に応じて評価します。"
+                else "入力した実績が目標値に近づくほど評価され、超過分は120%まで反映されます。",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
             Text("この行動で育つ力", style = MaterialTheme.typography.labelLarge)
             GrowthType.all.forEach { candidate ->
                 Row(
@@ -894,7 +981,7 @@ internal fun GoalEditorScreen(
                 }
             }
             ErrorText(errorMessage)
-            PrimaryButton(saveLabel, valid, "save_goal") { onSave(GoalDraft(title, parsed ?: 0, unit, type, icon)) }
+            PrimaryButton(saveLabel, valid, "save_goal") { onSave(GoalDraft(title, parsed ?: 0, unit, type, icon, evaluationMode)) }
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -1115,6 +1202,15 @@ private fun GoalTypeIcon(token: String, growthType: String, modifier: Modifier =
         "walk", "👣" -> Icons.AutoMirrored.Rounded.DirectionsWalk
         "book", "📖" -> Icons.AutoMirrored.Rounded.MenuBook
         "cln", "clean", "🧹" -> Icons.Rounded.CleaningServices
+        "fitness" -> Icons.Rounded.FitnessCenter
+        "stretch", "meditate" -> Icons.Rounded.SelfImprovement
+        "sleep" -> Icons.Rounded.Bedtime
+        "water" -> Icons.Rounded.WaterDrop
+        "food" -> Icons.Rounded.Restaurant
+        "study" -> Icons.Rounded.School
+        "journal" -> Icons.Rounded.Edit
+        "saving" -> Icons.Rounded.Savings
+        "wallet" -> Icons.Rounded.AccountBalanceWallet
         else -> growthImage(growthType)
     }
     Icon(image, contentDescription = null, modifier = modifier, tint = tint)

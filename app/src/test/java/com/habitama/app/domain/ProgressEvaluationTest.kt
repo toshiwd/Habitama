@@ -41,10 +41,25 @@ class ProgressEvaluationTest {
     }
 
     @Test
+    fun atMostGoalRewardsValuesWithinLimitAndReducesScoreAboveIt() {
+        val within = evaluateProgress(actual = 180, target = 200, mode = GoalEvaluationMode.AT_MOST)
+        val exact = evaluateProgress(actual = 200, target = 200, mode = GoalEvaluationMode.AT_MOST)
+        val over = evaluateProgress(actual = 250, target = 200, mode = GoalEvaluationMode.AT_MOST)
+
+        assertEquals(100, within.displayPercentage)
+        assertEquals(10, within.energyEarned)
+        assertEquals(100, exact.displayPercentage)
+        assertEquals(80, over.displayPercentage)
+        assertEquals(0.8, over.evaluationScore, 0.0001)
+        assertEquals(8, over.energyEarned)
+    }
+
+    @Test
     fun invalidBoundsAreRejected() {
         assertThrows(IllegalArgumentException::class.java) { evaluateProgress(1, 0) }
         assertThrows(IllegalArgumentException::class.java) { evaluateProgress(-1, 1) }
         assertThrows(IllegalArgumentException::class.java) { evaluateProgress(MAX_INPUT_VALUE + 1, 1) }
         assertThrows(IllegalArgumentException::class.java) { evaluateProgress(1, MAX_INPUT_VALUE + 1) }
+        assertThrows(IllegalArgumentException::class.java) { evaluateProgress(1, 1, "UNKNOWN") }
     }
 }

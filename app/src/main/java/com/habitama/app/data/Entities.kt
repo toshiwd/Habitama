@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.habitama.app.domain.GoalEvaluationMode
 
 object GrowthType {
     const val VITALITY = "VITALITY"
@@ -29,6 +30,7 @@ data class GoalEntity(
     val slotIndex: Int = 0,
     val growthType: String = GrowthType.DISCIPLINE,
     val icon: String = "✓",
+    val evaluationMode: String = GoalEvaluationMode.AT_LEAST,
 )
 
 @Entity(
@@ -56,6 +58,7 @@ data class DailyGoalRecordEntity(
     val displayPercentage: Int,
     val energyEarned: Int,
     val updatedAtEpochMillis: Long,
+    val evaluationModeSnapshot: String = GoalEvaluationMode.AT_LEAST,
 )
 
 @Entity(tableName = "growth_stats")

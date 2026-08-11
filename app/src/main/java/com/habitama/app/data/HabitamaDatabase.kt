@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [GoalEntity::class, DailyGoalRecordEntity::class, GrowthStatsEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class HabitamaDatabase : RoomDatabase() {
@@ -69,6 +69,13 @@ abstract class HabitamaDatabase : RoomDatabase() {
                     FROM daily_goal_records
                     """.trimIndent(),
                 )
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE goals ADD COLUMN evaluationMode TEXT NOT NULL DEFAULT 'AT_LEAST'")
+                db.execSQL("ALTER TABLE daily_goal_records ADD COLUMN evaluationModeSnapshot TEXT NOT NULL DEFAULT 'AT_LEAST'")
             }
         }
     }

@@ -2,6 +2,7 @@ package com.habitama.app.data
 
 import androidx.room.withTransaction
 import com.habitama.app.domain.MAX_INPUT_VALUE
+import com.habitama.app.domain.GoalEvaluationMode
 import com.habitama.app.domain.evaluateProgress
 import java.time.Clock
 import java.time.LocalDate
@@ -16,6 +17,7 @@ data class GoalDraft(
     val unit: String,
     val growthType: String = GrowthType.DISCIPLINE,
     val icon: String = "✓",
+    val evaluationMode: String = GoalEvaluationMode.AT_LEAST,
 )
 
 data class GoalGain(val goalId: Long, val title: String, val growthType: String, val points: Int)
@@ -151,7 +153,7 @@ class HabitamaRepository(
             var stats = statsDao.get() ?: GrowthStatsEntity()
             goals.forEach { goal ->
                 val actual = checkNotNull(actualValues[goal.id])
-                val evaluation = evaluateProgress(actual, goal.targetValue)
+                val evaluation = evaluateProgress(actual, goal.targetValue, goal.evaluationMode)
                 val previous = recordDao.getRecord(today.toString(), goal.id)
                 val delta = evaluation.energyEarned - (previous?.energyEarned ?: 0)
                 val record = DailyGoalRecordEntity(
@@ -166,6 +168,7 @@ class HabitamaRepository(
                     displayPercentage = evaluation.displayPercentage,
                     energyEarned = evaluation.energyEarned,
                     updatedAtEpochMillis = clock.millis(),
+                    evaluationModeSnapshot = goal.evaluationMode,
                 )
                 recordDao.upsert(record)
                 records += record
@@ -187,6 +190,7 @@ class HabitamaRepository(
                 slotIndex = slot,
                 growthType = draft.growthType,
                 icon = draft.icon.take(4),
+                evaluationMode = draft.evaluationMode,
             ),
         )
 
@@ -197,6 +201,7 @@ class HabitamaRepository(
         require(draft.unit.trim().isNotEmpty()) { "単位を入力してください" }
         require(draft.unit.trim().length <= 10) { "単位は10文字以内で入力してください" }
         require(draft.growthType in GrowthType.all) { "成長タイプが不正です" }
+        require(draft.evaluationMode in GoalEvaluationMode.all) { "評価方法が不正です" }
     }
 }
 

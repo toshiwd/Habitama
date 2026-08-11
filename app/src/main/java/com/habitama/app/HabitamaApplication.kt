@@ -17,7 +17,7 @@ class HabitamaApplication : Application() {
             applicationContext,
             HabitamaDatabase::class.java,
             "habitama.db",
-        ).addMigrations(HabitamaDatabase.MIGRATION_1_2).build()
+        ).addMigrations(HabitamaDatabase.MIGRATION_1_2, HabitamaDatabase.MIGRATION_2_3).build()
         repository = HabitamaRepository(database)
         NotificationChannels.create(this)
         ReminderScheduler.scheduleAll(this)

@@ -22,7 +22,7 @@ try {
     gh release create $tag $apk $manifest `
         --repo toshiwd/Habitama `
         --title "Habitama $versionName" `
-        --notes "Improved light-background status bar readability and made existing goal edits apply immediately while preserving record snapshots and point totals."
+        --notes "Added categorized goal samples, selectable common units, and correct at-least or at-most evaluation for limits such as calories and spending."
     if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publication failed.' }
     & .\scripts\verify-release.ps1
 } finally {
