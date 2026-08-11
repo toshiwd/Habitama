@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -54,6 +55,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,6 +85,7 @@ import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.CleaningServices
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Home
@@ -242,33 +245,109 @@ private fun androidx.navigation.NavController.navigateSingleTop(route: String) {
 }
 
 @Composable
-private fun OnboardingScreen(errorMessage: String?, onClearError: () -> Unit, onSave: (List<GoalDraft>) -> Unit) {
-    val selected = remember { mutableStateListOf(0, 1, 2) }
-    BotanicalBackground {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 28.dp).verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            StepDots(0)
-            Spacer(Modifier.height(28.dp))
-            Text("何を続ける？", style = MaterialTheme.typography.headlineLarge)
-            Spacer(Modifier.height(8.dp))
-            Text("結果ではなく、毎日の行動を選ぼう", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(28.dp))
-            templates.forEachIndexed { index, template ->
-                TemplateCard(template, index in selected) {
-                    onClearError()
-                    if (index in selected) selected.remove(index) else if (selected.size < MAX_ACTIVE_GOALS) selected.add(index)
+internal fun OnboardingScreen(errorMessage: String?, onClearError: () -> Unit, onSave: (List<GoalDraft>) -> Unit) {
+    val selectedTemplates = remember { mutableStateListOf<Int>() }
+    val customGoals = remember { mutableStateListOf<GoalDraft>() }
+    var creatingCustomGoal by rememberSaveable { mutableStateOf(false) }
+    val selectedCount = selectedTemplates.size + customGoals.size
+
+    if (creatingCustomGoal) {
+        GoalEditorScreen(
+            heading = "自分の行動を作る",
+            description = "毎日続けたい行動を、好きな名前・目標値・単位で設定できます。",
+            initialGoal = null,
+            saveLabel = "この行動を追加",
+            errorMessage = errorMessage,
+            onClearError = onClearError,
+            onBack = { creatingCustomGoal = false },
+        ) { draft ->
+            if (selectedTemplates.size + customGoals.size < MAX_ACTIVE_GOALS) customGoals.add(draft)
+            creatingCustomGoal = false
+        }
+    } else {
+        BotanicalBackground {
+            Column(
+                modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 24.dp, vertical = 28.dp)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                StepDots(0)
+                Spacer(Modifier.height(28.dp))
+                Text("何を続ける？", style = MaterialTheme.typography.headlineLarge)
+                Spacer(Modifier.height(8.dp))
+                Text("サンプルから選ぶか、自分の行動を作れます", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(28.dp))
+                templates.forEachIndexed { index, template ->
+                    TemplateCard(template, index in selectedTemplates) {
+                        onClearError()
+                        if (index in selectedTemplates) {
+                            selectedTemplates.remove(index)
+                        } else if (selectedCount < MAX_ACTIVE_GOALS) {
+                            selectedTemplates.add(index)
+                        }
+                    }
+                    Spacer(Modifier.height(14.dp))
                 }
-                Spacer(Modifier.height(14.dp))
+                if (customGoals.isNotEmpty()) {
+                    Text("自分で作った行動", modifier = Modifier.fillMaxWidth(), style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(10.dp))
+                    customGoals.forEachIndexed { index, draft ->
+                        CustomGoalDraftCard(draft) { customGoals.removeAt(index) }
+                        Spacer(Modifier.height(12.dp))
+                    }
+                }
+                OutlinedButton(
+                    onClick = { creatingCustomGoal = true },
+                    enabled = selectedCount < MAX_ACTIVE_GOALS,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp).testTag("create_custom_goal"),
+                    shape = RoundedCornerShape(18.dp),
+                ) {
+                    Icon(Icons.Rounded.Add, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("自分で行動を作る")
+                }
+                Spacer(Modifier.height(16.dp))
+                Text("$selectedCount / $MAX_ACTIVE_GOALS 選択中", color = HabitamaPrimary, fontWeight = FontWeight.Bold)
+                if (selectedCount == MAX_ACTIVE_GOALS) {
+                    Text(
+                        "別の行動を作る場合は、選択中のサンプルか作成済みの行動を外してください。",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                ErrorText(errorMessage)
+                Spacer(Modifier.height(18.dp))
+                PrimaryButton("これで始める", selectedCount > 0, "save_goal") {
+                    onSave(selectedTemplates.sorted().map { templates[it].draft } + customGoals.toList())
+                }
+                Spacer(Modifier.height(24.dp))
             }
-            Text("${selected.size} / $MAX_ACTIVE_GOALS 選択中", color = HabitamaPrimary, fontWeight = FontWeight.Bold)
-            ErrorText(errorMessage)
-            Spacer(Modifier.height(18.dp))
-            PrimaryButton("これで始める", selected.isNotEmpty(), "save_goal") {
-                onSave(selected.sorted().map { templates[it].draft })
+        }
+    }
+}
+
+@Composable
+private fun CustomGoalDraftCard(draft: GoalDraft, onRemove: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            GoalTypeIcon(draft.icon, draft.growthType, Modifier.size(32.dp), HabitamaPrimaryDark)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(draft.title, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "目標 ${draft.targetValue}${draft.unit}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            Spacer(Modifier.height(24.dp))
+            IconButton(onClick = onRemove, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Rounded.DeleteOutline, contentDescription = "${draft.title}を削除", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }
@@ -845,7 +924,10 @@ private fun ScreenShell(title: String, onBack: (() -> Unit)?, content: @Composab
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
-                Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier.fillMaxWidth().statusBarsPadding().heightIn(min = 64.dp).padding(horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     if (onBack != null) {
                         IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "戻る") }
                     } else Spacer(Modifier.width(12.dp))
@@ -858,12 +940,15 @@ private fun ScreenShell(title: String, onBack: (() -> Unit)?, content: @Composab
 }
 
 @Composable
-private fun AppHeader(title: String, onSettings: () -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+internal fun AppHeader(title: String, onSettings: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().statusBarsPadding().heightIn(min = 68.dp).padding(horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Icon(Icons.Rounded.Spa, contentDescription = null, tint = HabitamaPrimary, modifier = Modifier.size(30.dp))
         Spacer(Modifier.width(10.dp))
         Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-        IconButton(onClick = onSettings, modifier = Modifier.size(48.dp)) {
+        IconButton(onClick = onSettings, modifier = Modifier.size(48.dp).testTag("settings_button")) {
             Icon(Icons.Rounded.Settings, contentDescription = "設定", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }

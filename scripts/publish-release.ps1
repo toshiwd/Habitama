@@ -22,7 +22,7 @@ try {
     gh release create $tag $apk $manifest `
         --repo toshiwd/Habitama `
         --title "Habitama $versionName" `
-        --notes "Added reliable in-app update checks, Android DownloadManager progress/retry handling, SHA-256 verification, and direct APK installation."
+        --notes "Added custom goal creation during first-run setup and moved top-bar controls below system insets so the Settings button remains reliably tappable."
     if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publication failed.' }
     & .\scripts\verify-release.ps1
 } finally {
