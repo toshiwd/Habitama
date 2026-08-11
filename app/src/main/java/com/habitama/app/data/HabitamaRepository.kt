@@ -108,18 +108,31 @@ class HabitamaRepository(
         }
     }
 
-    suspend fun scheduleGoalUpdate(goalId: Long, draft: GoalDraft) {
+    suspend fun updateGoalNow(goalId: Long, draft: GoalDraft) {
         validateDraft(draft)
         val today = today()
-        val tomorrow = today.plusDays(1)
         database.withTransaction {
             val active = checkNotNull(goalDao.getById(goalId)) { "変更対象の行動がありません" }
             check(active.effectiveFrom <= today.toString() && (active.effectiveTo == null || active.effectiveTo >= today.toString())) {
                 "この行動は現在有効ではありません"
             }
-            goalDao.deleteStartingOnOrAfter(active.slotIndex, tomorrow.toString())
-            goalDao.setEffectiveTo(active.id, today.toString())
-            insertGoal(draft, active.slotIndex, tomorrow)
+            goalDao.deleteStartingOnOrAfter(active.slotIndex, today.plusDays(1).toString())
+            goalDao.setEffectiveTo(active.id, today.minusDays(1).toString())
+            val replacementId = insertGoal(draft, active.slotIndex, today)
+
+            val existingRecord = recordDao.getRecord(today.toString(), active.id)
+            if (existingRecord != null) {
+                recordDao.delete(today.toString(), active.id)
+                recordDao.upsert(existingRecord.copy(goalId = replacementId))
+                if (active.growthType != draft.growthType) {
+                    val stats = statsDao.get() ?: GrowthStatsEntity()
+                    statsDao.upsert(
+                        stats.add(active.growthType, -existingRecord.energyEarned)
+                            .add(draft.growthType, existingRecord.energyEarned)
+                            .copy(updatedAtEpochMillis = clock.millis()),
+                    )
+                }
+            }
         }
     }
 
@@ -164,7 +177,7 @@ class HabitamaRepository(
         }
     }
 
-    private suspend fun insertGoal(draft: GoalDraft, slot: Int, date: LocalDate) {
+    private suspend fun insertGoal(draft: GoalDraft, slot: Int, date: LocalDate): Long =
         goalDao.insert(
             GoalEntity(
                 title = draft.title.trim(),
@@ -176,7 +189,6 @@ class HabitamaRepository(
                 icon = draft.icon.take(4),
             ),
         )
-    }
 
     private fun validateDraft(draft: GoalDraft) {
         require(draft.title.trim().isNotEmpty()) { "行動の名前を入力してください" }

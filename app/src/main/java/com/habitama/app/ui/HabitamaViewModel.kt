@@ -77,8 +77,8 @@ class HabitamaViewModel(application: Application) : AndroidViewModel(application
         repository.addGoal(draft)
     }
 
-    fun scheduleGoalUpdate(goalId: Long, draft: GoalDraft, onSuccess: () -> Unit) = launchAction(onSuccess) {
-        repository.scheduleGoalUpdate(goalId, draft)
+    fun updateGoalNow(goalId: Long, draft: GoalDraft, onSuccess: () -> Unit) = launchAction(onSuccess) {
+        repository.updateGoalNow(goalId, draft)
     }
 
     fun saveTodayRecords(actualValues: Map<Long, Long>, onSuccess: () -> Unit) = launchAction(onSuccess) {

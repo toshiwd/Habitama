@@ -55,18 +55,28 @@ class HabitamaRepositoryTest {
     }
 
     @Test
-    fun scheduledGoalStartsTomorrowAndKeepsSnapshot() = runBlocking {
+    fun goalUpdateAppliesNowAndMigratesTodayRecordWithoutDoubleCounting() = runBlocking {
         repository.createInitialGoals(listOf(GoalDraft("歩く", 6_000, "歩")))
         val goal = database.goalDao().getActiveGoals("2026-08-10").single()
         repository.saveTodayRecords(mapOf(goal.id to 5_000))
-        repository.scheduleGoalUpdate(goal.id, GoalDraft("運動する", 20, "分", GrowthType.VITALITY, "♥"))
+        repository.updateGoalNow(goal.id, GoalDraft("運動する", 20, "分", GrowthType.VITALITY, "♥"))
 
         val todayGoal = database.goalDao().getActiveGoals("2026-08-10").single()
-        val tomorrowGoal = database.goalDao().getActiveGoals("2026-08-11").single()
-        val record = database.recordDao().getRecord("2026-08-10", goal.id)
-        assertEquals("歩く", todayGoal.title)
-        assertEquals("運動する", tomorrowGoal.title)
-        assertNotNull(record)
-        assertEquals(6_000L, record?.targetValueSnapshot)
+        val migratedRecord = database.recordDao().getRecord("2026-08-10", todayGoal.id)
+        assertEquals("運動する", todayGoal.title)
+        assertEquals(20L, todayGoal.targetValue)
+        assertEquals(null, database.recordDao().getRecord("2026-08-10", goal.id))
+        assertNotNull(migratedRecord)
+        assertEquals(6_000L, migratedRecord?.targetValueSnapshot)
+        assertEquals(1, database.recordDao().count())
+        assertEquals(8, database.growthStatsDao().get()?.vitality)
+        assertEquals(0, database.growthStatsDao().get()?.discipline)
+
+        repository.saveTodayRecords(mapOf(todayGoal.id to 20))
+        val updatedRecord = database.recordDao().getRecord("2026-08-10", todayGoal.id)
+        assertEquals(1, database.recordDao().count())
+        assertEquals(20L, updatedRecord?.targetValueSnapshot)
+        assertEquals(10, database.growthStatsDao().get()?.vitality)
+        assertEquals(10, database.growthStatsDao().get()?.totalPoints)
     }
 }

@@ -22,7 +22,7 @@ try {
     gh release create $tag $apk $manifest `
         --repo toshiwd/Habitama `
         --title "Habitama $versionName" `
-        --notes "Added custom goal creation during first-run setup and moved top-bar controls below system insets so the Settings button remains reliably tappable."
+        --notes "Improved light-background status bar readability and made existing goal edits apply immediately while preserving record snapshots and point totals."
     if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publication failed.' }
     & .\scripts\verify-release.ps1
 } finally {

@@ -228,14 +228,14 @@ fun HabitamaRoot(viewModel: HabitamaViewModel = viewModel()) {
             val goalId = entry.arguments?.getLong("goalId") ?: 0
             val goal = state.activeGoals.firstOrNull { it.id == goalId }
             GoalEditorScreen(
-                heading = "明日からの行動を変更",
-                description = "今日の目標と記録は変わりません。",
+                heading = "行動を変更",
+                description = "保存すると、ホームと今日の報告へすぐに反映されます。",
                 initialGoal = goal,
-                saveLabel = "明日から変更する",
+                saveLabel = "今すぐ変更する",
                 errorMessage = state.errorMessage,
                 onClearError = viewModel::clearError,
                 onBack = nav::popBackStack,
-            ) { draft -> viewModel.scheduleGoalUpdate(goalId, draft) { nav.popBackStack() } }
+            ) { draft -> viewModel.updateGoalNow(goalId, draft) { nav.popBackStack() } }
         }
     }
 }
@@ -401,7 +401,7 @@ private fun HomeScreen(state: HabitamaUiState, padding: PaddingValues, onReport:
         item { GrowthStrip(state.growthStats) }
         if (state.pendingGoals.isNotEmpty()) {
             item {
-                Text("明日から変更予定：${state.pendingGoals.joinToString { it.title }}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("以前に予約した変更（明日から）：${state.pendingGoals.joinToString { it.title }}", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         item {
@@ -773,7 +773,7 @@ private fun GoalManagementScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                Text("目標は頻繁に変えず、月に一度を目安に見直しましょう。変更内容は翌日から反映されます。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("目標は月に一度を目安に見直しましょう。変更内容は保存後すぐに反映されます。", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             items(state.activeGoals, key = { it.id }) { goal ->
                 Card(
@@ -802,7 +802,7 @@ private fun GoalManagementScreen(
                 }
             }
             if (state.pendingGoals.isNotEmpty()) {
-                item { Text("明日から変更予定：${state.pendingGoals.joinToString { it.title }}", color = HabitamaPrimaryDark) }
+                item { Text("以前に予約した変更（明日から）：${state.pendingGoals.joinToString { it.title }}", color = HabitamaPrimaryDark) }
             }
         }
     }

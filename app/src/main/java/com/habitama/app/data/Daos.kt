@@ -61,6 +61,9 @@ interface DailyGoalRecordDao {
     @Query("SELECT COUNT(*) FROM daily_goal_records")
     suspend fun count(): Int
 
+    @Query("DELETE FROM daily_goal_records WHERE date = :date AND goalId = :goalId")
+    suspend fun delete(date: String, goalId: Long)
+
     @Upsert
     suspend fun upsert(record: DailyGoalRecordEntity)
 }
