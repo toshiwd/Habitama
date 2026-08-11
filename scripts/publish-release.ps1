@@ -22,7 +22,7 @@ try {
     gh release create $tag $apk $manifest `
         --repo toshiwd/Habitama `
         --title "Habitama $versionName" `
-        --notes "Added read-only display of device-synced calendar events with per-calendar selection, monthly markers, and a daily agenda. Event data is not stored by Habitama."
+        --notes "Calendar navigation now supports past and future months, up to 10 action goals can be registered, and the Habitama egg and launcher icon use a new original spotted design."
     if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publication failed.' }
     & .\scripts\verify-release.ps1
 } finally {

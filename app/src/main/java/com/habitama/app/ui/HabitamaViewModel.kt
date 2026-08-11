@@ -32,6 +32,7 @@ data class DeviceCalendarUiState(
     val calendars: List<DeviceCalendar> = emptyList(),
     val selectedCalendarIds: Set<Long> = emptySet(),
     val events: List<DeviceCalendarEvent> = emptyList(),
+    val visibleMonth: YearMonth? = null,
     val errorMessage: String? = null,
 )
 
@@ -44,6 +45,7 @@ data class HabitamaUiState(
     val totalEnergy: Int = 0,
     val growthStats: GrowthStatsEntity = GrowthStatsEntity(),
     val history: List<HistoryDay> = emptyList(),
+    val calendarRecords: List<DailyGoalRecordEntity> = emptyList(),
     val lastGains: List<GoalGain> = emptyList(),
     val lastEarned: Int = 0,
     val errorMessage: String? = null,
@@ -79,6 +81,7 @@ class HabitamaViewModel(application: Application) : AndroidViewModel(application
                             totalEnergy = data.totalEnergy,
                             growthStats = data.growthStats.copy(totalPoints = data.totalEnergy),
                             history = history,
+                            calendarRecords = data.records,
                         )
                     }
                 }
@@ -109,6 +112,11 @@ class HabitamaViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun refreshDeviceCalendar() {
+        refreshDeviceCalendarMonth(_state.value.deviceCalendar.visibleMonth ?: YearMonth.from(_state.value.today))
+    }
+
+    fun refreshDeviceCalendarMonth(month: YearMonth) {
+        _state.update { it.copy(deviceCalendar = it.deviceCalendar.copy(visibleMonth = month)) }
         viewModelScope.launch(Dispatchers.IO) {
             val settings = deviceCalendarRepository.loadSettings()
             val permissionGranted = deviceCalendarRepository.hasReadPermission()
@@ -121,6 +129,7 @@ class HabitamaViewModel(application: Application) : AndroidViewModel(application
                             calendars = emptyList(),
                             selectedCalendarIds = emptySet(),
                             events = emptyList(),
+                            visibleMonth = month,
                             errorMessage = null,
                         ),
                     )
@@ -135,7 +144,6 @@ class HabitamaViewModel(application: Application) : AndroidViewModel(application
                 if (settings.selectedCalendarIds == null && selectedIds.isNotEmpty()) {
                     deviceCalendarRepository.setSelectedCalendarIds(selectedIds)
                 }
-                val month = YearMonth.from(_state.value.today)
                 val events = deviceCalendarRepository.eventsBetween(month.atDay(1), month.plusMonths(1).atDay(1), selectedIds)
                 DeviceCalendarUiState(
                     enabled = true,
@@ -143,16 +151,21 @@ class HabitamaViewModel(application: Application) : AndroidViewModel(application
                     calendars = calendars,
                     selectedCalendarIds = selectedIds,
                     events = events,
+                    visibleMonth = month,
                 )
             }.onSuccess { calendarState ->
-                _state.update { it.copy(deviceCalendar = calendarState) }
+                _state.update {
+                    if (it.deviceCalendar.visibleMonth == month) it.copy(deviceCalendar = calendarState) else it
+                }
             }.onFailure { error ->
                 _state.update {
+                    if (it.deviceCalendar.visibleMonth != month) return@update it
                     it.copy(
                         deviceCalendar = it.deviceCalendar.copy(
                             enabled = true,
                             permissionGranted = true,
                             events = emptyList(),
+                            visibleMonth = month,
                             errorMessage = error.message ?: "端末カレンダーを読み込めませんでした",
                         ),
                     )

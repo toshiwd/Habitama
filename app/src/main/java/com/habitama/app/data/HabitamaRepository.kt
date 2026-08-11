@@ -9,7 +9,7 @@ import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 
-const val MAX_ACTIVE_GOALS = 3
+const val MAX_ACTIVE_GOALS = 10
 
 data class GoalDraft(
     val title: String,
@@ -60,7 +60,6 @@ class HabitamaRepository(
         val today = today()
         val todayText = today.toString()
         val tomorrowText = today.plusDays(1).toString()
-        val historyStart = today.minusDays(41).toString()
         val core = combine(
             goalDao.observeActiveGoals(todayText),
             goalDao.observeGoalsStartingOn(tomorrowText),
@@ -76,7 +75,7 @@ class HabitamaRepository(
                 stats ?: GrowthStatsEntity(totalPoints = totalEnergy),
             )
         }
-        return core.combine(recordDao.observeRange(historyStart, todayText)) { current, records ->
+        return core.combine(recordDao.observeAll()) { current, records ->
             DashboardData(
                 today = today,
                 activeGoals = current.activeGoals,
@@ -91,7 +90,7 @@ class HabitamaRepository(
 
     suspend fun createInitialGoals(drafts: List<GoalDraft>) {
         require(drafts.isNotEmpty()) { "行動を1つ以上選んでください" }
-        require(drafts.size <= MAX_ACTIVE_GOALS) { "行動は3つまでです" }
+        require(drafts.size <= MAX_ACTIVE_GOALS) { "行動は${MAX_ACTIVE_GOALS}件までです" }
         drafts.forEach(::validateDraft)
         database.withTransaction {
             check(goalDao.getActiveGoals(today().toString()).isEmpty()) { "今日の行動はすでに設定されています" }
@@ -104,7 +103,7 @@ class HabitamaRepository(
         validateDraft(draft)
         database.withTransaction {
             val active = goalDao.getActiveGoals(today().toString()).distinctBy { it.slotIndex }
-            check(active.size < MAX_ACTIVE_GOALS) { "行動は3つまでです" }
+            check(active.size < MAX_ACTIVE_GOALS) { "行動は${MAX_ACTIVE_GOALS}件までです" }
             val slot = (0 until MAX_ACTIVE_GOALS).first { candidate -> active.none { it.slotIndex == candidate } }
             insertGoal(draft, slot, today())
         }

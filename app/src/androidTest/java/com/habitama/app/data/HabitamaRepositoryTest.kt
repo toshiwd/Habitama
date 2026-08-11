@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -95,5 +96,18 @@ class HabitamaRepositoryTest {
         assertEquals(GoalEvaluationMode.AT_MOST, record?.evaluationModeSnapshot)
         assertEquals(80, record?.displayPercentage)
         assertEquals(8, record?.energyEarned)
+    }
+
+    @Test
+    fun tenGoalsAreAllowedAndEleventhGoalIsRejected() = runBlocking {
+        repository.createInitialGoals(
+            (1..MAX_ACTIVE_GOALS).map { index -> GoalDraft("行動$index", index.toLong(), "回") },
+        )
+
+        val failure = runCatching { repository.addGoal(GoalDraft("11件目", 11, "回")) }
+
+        assertEquals(MAX_ACTIVE_GOALS, database.goalDao().getActiveGoals("2026-08-10").size)
+        assertTrue(failure.isFailure)
+        assertEquals("行動は10件までです", failure.exceptionOrNull()?.message)
     }
 }

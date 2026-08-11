@@ -55,6 +55,9 @@ interface DailyGoalRecordDao {
     @Query("SELECT * FROM daily_goal_records WHERE date BETWEEN :start AND :end ORDER BY date DESC, goalId")
     fun observeRange(start: String, end: String): Flow<List<DailyGoalRecordEntity>>
 
+    @Query("SELECT * FROM daily_goal_records ORDER BY date DESC, goalId")
+    fun observeAll(): Flow<List<DailyGoalRecordEntity>>
+
     @Query("SELECT COALESCE(SUM(energyEarned), 0) FROM daily_goal_records")
     fun observeTotalEnergy(): Flow<Int>
 

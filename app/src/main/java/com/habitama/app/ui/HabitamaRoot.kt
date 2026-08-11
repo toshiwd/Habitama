@@ -73,6 +73,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -108,6 +109,7 @@ import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.DirectionsWalk
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.automirrored.rounded.ShowChart
@@ -202,7 +204,7 @@ fun HabitamaRoot(viewModel: HabitamaViewModel = viewModel()) {
         }
         composable(ROUTE_CALENDAR) {
             MainScreen(title = "行動カレンダー", selected = ROUTE_CALENDAR, onTab = { nav.navigateSingleTop(it) }, onSettings = { nav.navigate(ROUTE_SETTINGS) }) { padding ->
-                CalendarScreen(state, padding, viewModel::refreshDeviceCalendar)
+                CalendarScreen(state, padding, viewModel::refreshDeviceCalendarMonth)
             }
         }
         composable(ROUTE_GROWTH) {
@@ -616,9 +618,12 @@ private fun ResultScreen(state: HabitamaUiState, onHome: () -> Unit) {
 }
 
 @Composable
-internal fun CalendarScreen(state: HabitamaUiState, padding: PaddingValues, onRefreshDeviceCalendar: () -> Unit = {}) {
-    val month = YearMonth.from(state.today)
-    val byDate = state.history.associateBy { it.date }
+internal fun CalendarScreen(state: HabitamaUiState, padding: PaddingValues, onVisibleMonthChanged: (YearMonth) -> Unit = {}) {
+    var visibleMonthText by rememberSaveable { mutableStateOf(YearMonth.from(state.today).toString()) }
+    val month = YearMonth.parse(visibleMonthText)
+    val byDate = remember(state.calendarRecords) {
+        state.calendarRecords.groupBy { LocalDate.parse(it.date) }
+    }
     var selectedDateText by rememberSaveable { mutableStateOf(state.today.toString()) }
     val selectedDate = LocalDate.parse(selectedDateText)
     val eventsByDate = remember(state.deviceCalendar.events) {
@@ -630,14 +635,46 @@ internal fun CalendarScreen(state: HabitamaUiState, padding: PaddingValues, onRe
     }
     val leading = month.atDay(1).dayOfWeek.value - 1
     val cells = List(leading) { null } + (1..month.lengthOfMonth()).map(month::atDay)
-    LaunchedEffect(Unit) { onRefreshDeviceCalendar() }
+    fun showMonth(next: YearMonth) {
+        visibleMonthText = next.toString()
+        selectedDateText = next.atDay(minOf(selectedDate.dayOfMonth, next.lengthOfMonth())).toString()
+    }
+    LaunchedEffect(month) { onVisibleMonthChanged(month) }
     Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp).verticalScroll(rememberScrollState())) {
         Spacer(Modifier.height(12.dp))
         Card(
             shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(4.dp),
         ) {
             Column(Modifier.padding(18.dp)) {
-                Text("${month.year}年 ${month.monthValue}月", style = MaterialTheme.typography.headlineSmall)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { showMonth(month.minusMonths(1)) },
+                        modifier = Modifier.testTag("calendar_previous_month"),
+                    ) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "前の月")
+                    }
+                    Text(
+                        "${month.year}年 ${month.monthValue}月",
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.headlineSmall,
+                    )
+                    IconButton(
+                        onClick = { showMonth(month.plusMonths(1)) },
+                        modifier = Modifier.testTag("calendar_next_month"),
+                    ) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = "次の月")
+                    }
+                }
+                if (month != YearMonth.from(state.today)) {
+                    TextButton(
+                        onClick = {
+                            visibleMonthText = YearMonth.from(state.today).toString()
+                            selectedDateText = state.today.toString()
+                        },
+                        modifier = Modifier.align(Alignment.End).testTag("calendar_today"),
+                    ) { Text("今日へ戻る") }
+                }
                 Spacer(Modifier.height(16.dp))
                 Row(Modifier.fillMaxWidth()) {
                     listOf("月", "火", "水", "木", "金", "土", "日").forEachIndexed { index, label ->
@@ -652,7 +689,7 @@ internal fun CalendarScreen(state: HabitamaUiState, padding: PaddingValues, onRe
                                 if (date != null) {
                                     CalendarDay(
                                         date = date,
-                                        records = byDate[date]?.records.orEmpty(),
+                                        records = byDate[date].orEmpty(),
                                         events = eventsByDate[date].orEmpty(),
                                         today = date == state.today,
                                         selected = date == selectedDate,
@@ -1433,11 +1470,23 @@ private fun HabitamaEgg(modifier: Modifier = Modifier) {
             cubicTo(size.width * .88f, size.height * .48f, size.width * .72f, size.height * .08f, size.width * .5f, size.height * .05f)
             close()
         }
-        drawPath(egg, Color(0xFFF3A05A))
-        drawOval(Color.White.copy(alpha = .42f), topLeft = Offset(size.width * .31f, size.height * .23f), size = androidx.compose.ui.geometry.Size(size.width * .16f, size.height * .28f))
-        drawCircle(Color(0xFFC96F55), radius = size.minDimension * .035f, center = Offset(size.width * .62f, size.height * .67f))
-        drawCircle(Color(0xFFC96F55), radius = size.minDimension * .025f, center = Offset(size.width * .72f, size.height * .74f))
-        drawCircle(Color(0xFFC96F55), radius = size.minDimension * .022f, center = Offset(size.width * .45f, size.height * .78f))
+        drawPath(egg, Color(0xFFFFF7E4))
+        clipPath(egg) {
+            drawCircle(Color(0xFF2F968A), radius = size.minDimension * .145f, center = Offset(size.width * .31f, size.height * .45f))
+            drawCircle(Color(0xFFEF7182), radius = size.minDimension * .13f, center = Offset(size.width * .7f, size.height * .57f))
+            drawCircle(Color(0xFFF3B65A), radius = size.minDimension * .105f, center = Offset(size.width * .44f, size.height * .77f))
+            drawCircle(Color(0xFF79BBA8), radius = size.minDimension * .08f, center = Offset(size.width * .61f, size.height * .24f))
+        }
+        drawOval(
+            Color.White.copy(alpha = .72f),
+            topLeft = Offset(size.width * .32f, size.height * .2f),
+            size = androidx.compose.ui.geometry.Size(size.width * .1f, size.height * .2f),
+        )
+        drawPath(
+            egg,
+            Color(0xFF287F76),
+            style = Stroke(width = size.minDimension * .035f, cap = StrokeCap.Round),
+        )
     }
 }
 
