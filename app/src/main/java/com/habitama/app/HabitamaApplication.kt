@@ -2,6 +2,7 @@ package com.habitama.app
 
 import android.app.Application
 import androidx.room.Room
+import com.habitama.app.calendar.DeviceCalendarRepository
 import com.habitama.app.data.HabitamaDatabase
 import com.habitama.app.data.HabitamaRepository
 import com.habitama.app.notifications.NotificationChannels
@@ -9,6 +10,8 @@ import com.habitama.app.notifications.ReminderScheduler
 
 class HabitamaApplication : Application() {
     lateinit var repository: HabitamaRepository
+        private set
+    lateinit var deviceCalendarRepository: DeviceCalendarRepository
         private set
 
     override fun onCreate() {
@@ -19,6 +22,7 @@ class HabitamaApplication : Application() {
             "habitama.db",
         ).addMigrations(HabitamaDatabase.MIGRATION_1_2, HabitamaDatabase.MIGRATION_2_3).build()
         repository = HabitamaRepository(database)
+        deviceCalendarRepository = DeviceCalendarRepository(applicationContext)
         NotificationChannels.create(this)
         ReminderScheduler.scheduleAll(this)
     }

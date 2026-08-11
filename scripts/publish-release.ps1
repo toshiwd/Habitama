@@ -22,7 +22,7 @@ try {
     gh release create $tag $apk $manifest `
         --repo toshiwd/Habitama `
         --title "Habitama $versionName" `
-        --notes "Added categorized goal samples, selectable common units, and correct at-least or at-most evaluation for limits such as calories and spending."
+        --notes "Added read-only display of device-synced calendar events with per-calendar selection, monthly markers, and a daily agenda. Event data is not stored by Habitama."
     if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publication failed.' }
     & .\scripts\verify-release.ps1
 } finally {

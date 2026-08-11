@@ -2,7 +2,12 @@ package com.habitama.app.ui
 
 import android.Manifest
 import android.app.TimePickerDialog
+import android.content.ContentUris
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.CalendarContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -110,6 +115,7 @@ import androidx.compose.material.icons.rounded.Spa
 import androidx.compose.material.icons.rounded.SelfImprovement
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.WaterDrop
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -122,6 +128,7 @@ import com.habitama.app.data.GoalEntity
 import com.habitama.app.data.GrowthStatsEntity
 import com.habitama.app.data.GrowthType
 import com.habitama.app.data.MAX_ACTIVE_GOALS
+import com.habitama.app.calendar.DeviceCalendarEvent
 import com.habitama.app.domain.MAX_INPUT_VALUE
 import com.habitama.app.domain.GoalEvaluationMode
 import com.habitama.app.domain.JapaneseHolidays
@@ -138,8 +145,10 @@ import com.habitama.app.ui.theme.HabitamaPrimaryDark
 import com.habitama.app.ui.theme.HabitamaRose
 import com.habitama.app.ui.theme.HabitamaSuccess
 import java.time.LocalDate
+import java.time.Instant
 import java.time.YearMonth
 import java.time.DayOfWeek
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToLong
@@ -193,7 +202,7 @@ fun HabitamaRoot(viewModel: HabitamaViewModel = viewModel()) {
         }
         composable(ROUTE_CALENDAR) {
             MainScreen(title = "行動カレンダー", selected = ROUTE_CALENDAR, onTab = { nav.navigateSingleTop(it) }, onSettings = { nav.navigate(ROUTE_SETTINGS) }) { padding ->
-                CalendarScreen(state, padding)
+                CalendarScreen(state, padding, viewModel::refreshDeviceCalendar)
             }
         }
         composable(ROUTE_GROWTH) {
@@ -202,7 +211,15 @@ fun HabitamaRoot(viewModel: HabitamaViewModel = viewModel()) {
             }
         }
         composable(ROUTE_SETTINGS) {
-            SettingsScreen(onBack = nav::popBackStack, onGoals = { nav.navigate(ROUTE_GOAL_MANAGEMENT) })
+            SettingsScreen(
+                state = state,
+                onBack = nav::popBackStack,
+                onGoals = { nav.navigate(ROUTE_GOAL_MANAGEMENT) },
+                onRefreshDeviceCalendar = viewModel::refreshDeviceCalendar,
+                onDeviceCalendarEnabled = viewModel::setDeviceCalendarEnabled,
+                onDeviceCalendarPermissionDenied = viewModel::onDeviceCalendarPermissionDenied,
+                onDeviceCalendarSelected = viewModel::setDeviceCalendarSelected,
+            )
         }
         composable(ROUTE_GOAL_MANAGEMENT) {
             GoalManagementScreen(
@@ -599,11 +616,21 @@ private fun ResultScreen(state: HabitamaUiState, onHome: () -> Unit) {
 }
 
 @Composable
-private fun CalendarScreen(state: HabitamaUiState, padding: PaddingValues) {
+internal fun CalendarScreen(state: HabitamaUiState, padding: PaddingValues, onRefreshDeviceCalendar: () -> Unit = {}) {
     val month = YearMonth.from(state.today)
     val byDate = state.history.associateBy { it.date }
+    var selectedDateText by rememberSaveable { mutableStateOf(state.today.toString()) }
+    val selectedDate = LocalDate.parse(selectedDateText)
+    val eventsByDate = remember(state.deviceCalendar.events) {
+        buildMap<LocalDate, MutableList<DeviceCalendarEvent>> {
+            state.deviceCalendar.events.forEach { event ->
+                event.dates().forEach { date -> getOrPut(date) { mutableListOf() }.add(event) }
+            }
+        }
+    }
     val leading = month.atDay(1).dayOfWeek.value - 1
     val cells = List(leading) { null } + (1..month.lengthOfMonth()).map(month::atDay)
+    LaunchedEffect(Unit) { onRefreshDeviceCalendar() }
     Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp).verticalScroll(rememberScrollState())) {
         Spacer(Modifier.height(12.dp))
         Card(
@@ -622,7 +649,16 @@ private fun CalendarScreen(state: HabitamaUiState, padding: PaddingValues) {
                     Row(Modifier.fillMaxWidth()) {
                         week.forEach { date ->
                             Box(Modifier.weight(1f).height(48.dp), contentAlignment = Alignment.Center) {
-                                if (date != null) CalendarDay(date, byDate[date]?.records.orEmpty(), date == state.today)
+                                if (date != null) {
+                                    CalendarDay(
+                                        date = date,
+                                        records = byDate[date]?.records.orEmpty(),
+                                        events = eventsByDate[date].orEmpty(),
+                                        today = date == state.today,
+                                        selected = date == selectedDate,
+                                        onSelect = { selectedDateText = date.toString() },
+                                    )
+                                }
                             }
                         }
                         repeat(7 - week.size) { Spacer(Modifier.weight(1f)) }
@@ -630,6 +666,12 @@ private fun CalendarScreen(state: HabitamaUiState, padding: PaddingValues) {
                 }
             }
         }
+        Spacer(Modifier.height(18.dp))
+        DeviceCalendarAgenda(
+            date = selectedDate,
+            calendarState = state.deviceCalendar,
+            events = eventsByDate[selectedDate].orEmpty(),
+        )
         Spacer(Modifier.height(18.dp))
         Text("最近の記録", style = MaterialTheme.typography.titleLarge)
         Text("記録がない日も失敗ではありません。", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -640,18 +682,89 @@ private fun CalendarScreen(state: HabitamaUiState, padding: PaddingValues) {
 }
 
 @Composable
-private fun CalendarDay(date: LocalDate, records: List<DailyGoalRecordEntity>, today: Boolean) {
+private fun CalendarDay(
+    date: LocalDate,
+    records: List<DailyGoalRecordEntity>,
+    events: List<DeviceCalendarEvent>,
+    today: Boolean,
+    selected: Boolean,
+    onSelect: () -> Unit,
+) {
     val dateColor = when {
         JapaneseHolidays.isHoliday(date) || date.dayOfWeek == DayOfWeek.SUNDAY -> Color(0xFFC94F5B)
         date.dayOfWeek == DayOfWeek.SATURDAY -> HabitamaBlue
         else -> MaterialTheme.colorScheme.onSurface
     }
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onSelect).padding(vertical = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Box(
-            Modifier.size(30.dp).background(if (today) HabitamaPrimary.copy(alpha = .16f) else Color.Transparent, CircleShape),
+            Modifier.size(30.dp).background(
+                when {
+                    selected -> HabitamaBlue.copy(alpha = .18f)
+                    today -> HabitamaPrimary.copy(alpha = .16f)
+                    else -> Color.Transparent
+                },
+                CircleShape,
+            ),
             contentAlignment = Alignment.Center,
         ) { Text(date.dayOfMonth.toString(), color = dateColor, fontSize = 14.sp, fontWeight = if (today) FontWeight.Bold else FontWeight.Normal) }
-        if (records.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) { records.take(3).forEach { Box(Modifier.size(4.dp).background(if (it.displayPercentage >= 100) HabitamaPrimary else HabitamaLeaf, CircleShape)) } }
+        Row(Modifier.height(5.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            if (records.isNotEmpty()) {
+                Box(Modifier.size(4.dp).background(if (records.any { it.displayPercentage >= 100 }) HabitamaPrimary else HabitamaLeaf, CircleShape))
+            }
+            events.take(2).forEach { event ->
+                Box(Modifier.size(4.dp).background(deviceCalendarColor(event.color), CircleShape))
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeviceCalendarAgenda(
+    date: LocalDate,
+    calendarState: DeviceCalendarUiState,
+    events: List<DeviceCalendarEvent>,
+) {
+    val context = LocalContext.current
+    Text("${date.monthValue}月${date.dayOfMonth}日の予定", style = MaterialTheme.typography.titleLarge)
+    Spacer(Modifier.height(8.dp))
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            when {
+                !calendarState.enabled -> {
+                    Text("設定で「端末カレンダーの予定」をオンにすると、同期済みの予定を表示できます。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                !calendarState.permissionGranted -> {
+                    Text("カレンダーの読み取り権限がありません。設定から許可してください。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                calendarState.errorMessage != null -> {
+                    Text(calendarState.errorMessage, color = MaterialTheme.colorScheme.error)
+                }
+                events.isEmpty() -> {
+                    Text("予定なし", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                else -> events.forEachIndexed { index, event ->
+                    if (index > 0) HorizontalDivider(color = HabitamaLine)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { openDeviceCalendarEvent(context, event) },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.width(4.dp).height(40.dp).background(deviceCalendarColor(event.color), RoundedCornerShape(4.dp)))
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(event.title, fontWeight = FontWeight.SemiBold)
+                            Text(deviceCalendarTimeLabel(event), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -706,7 +819,15 @@ private fun GrowthScreen(state: HabitamaUiState, padding: PaddingValues) {
 }
 
 @Composable
-private fun SettingsScreen(onBack: () -> Unit, onGoals: () -> Unit) {
+internal fun SettingsScreen(
+    state: HabitamaUiState,
+    onBack: () -> Unit,
+    onGoals: () -> Unit,
+    onRefreshDeviceCalendar: () -> Unit,
+    onDeviceCalendarEnabled: (Boolean) -> Unit,
+    onDeviceCalendarPermissionDenied: () -> Unit,
+    onDeviceCalendarSelected: (Long, Boolean) -> Unit,
+) {
     val context = LocalContext.current
     val preferences = remember { ReminderPreferences(context) }
     var settings by remember { mutableStateOf(preferences.load()) }
@@ -715,9 +836,13 @@ private fun SettingsScreen(onBack: () -> Unit, onGoals: () -> Unit) {
         preferences.save(next)
         ReminderScheduler.scheduleAll(context, next)
     }
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (!granted) persist(settings.copy(dailyEnabled = false, monthlyReviewEnabled = false))
     }
+    val calendarPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) onDeviceCalendarEnabled(true) else onDeviceCalendarPermissionDenied()
+    }
+    LaunchedEffect(Unit) { onRefreshDeviceCalendar() }
 
     ScreenShell("設定", onBack) { padding ->
         Column(
@@ -732,6 +857,72 @@ private fun SettingsScreen(onBack: () -> Unit, onGoals: () -> Unit) {
                 subtitle = "追加・変更はここから行います",
                 onClick = onGoals,
             )
+            Text("カレンダー", style = MaterialTheme.typography.titleLarge)
+            Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column {
+                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.CalendarMonth, contentDescription = null, tint = HabitamaBlue)
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("端末カレンダーの予定", fontWeight = FontWeight.Bold)
+                            Text("同期済みの予定を読み取り専用で表示", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                        }
+                        Switch(
+                            checked = state.deviceCalendar.enabled,
+                            onCheckedChange = { checked ->
+                                if (!checked) {
+                                    onDeviceCalendarEnabled(false)
+                                } else if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED) {
+                                    onDeviceCalendarEnabled(true)
+                                } else {
+                                    calendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR)
+                                }
+                            },
+                            modifier = Modifier.testTag("device_calendar_toggle"),
+                        )
+                    }
+                    if (state.deviceCalendar.enabled && !state.deviceCalendar.permissionGranted) {
+                        HorizontalDivider(color = HabitamaLine)
+                        OutlinedButton(
+                            onClick = { calendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR) },
+                            modifier = Modifier.fillMaxWidth().padding(16.dp).heightIn(min = 48.dp).testTag("grant_calendar_permission"),
+                        ) { Text("カレンダーの読み取りを許可") }
+                    }
+                    if (state.deviceCalendar.enabled && state.deviceCalendar.permissionGranted) {
+                        HorizontalDivider(color = HabitamaLine)
+                        if (state.deviceCalendar.calendars.isEmpty()) {
+                            Text(
+                                "端末に表示できるカレンダーがありません。Googleカレンダーアプリで同期を確認してください。",
+                                modifier = Modifier.padding(16.dp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            state.deviceCalendar.calendars.forEachIndexed { index, calendar ->
+                                if (index > 0) HorizontalDivider(color = HabitamaLine.copy(alpha = .7f))
+                                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Box(Modifier.size(12.dp).background(deviceCalendarColor(calendar.color), CircleShape))
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(calendar.displayName, fontWeight = FontWeight.SemiBold)
+                                        if (calendar.accountName.isNotBlank()) {
+                                            Text(calendar.accountName, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                                        }
+                                    }
+                                    Switch(
+                                        checked = calendar.id in state.deviceCalendar.selectedCalendarIds,
+                                        onCheckedChange = { onDeviceCalendarSelected(calendar.id, it) },
+                                        modifier = Modifier.testTag("device_calendar_${calendar.id}"),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    state.deviceCalendar.errorMessage?.let { message ->
+                        Text(message, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp), color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+            Text("予定は端末からその都度読み取り、Habitamaのデータベースには保存しません。予定の追加・変更権限も要求しません。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             Text("お知らせ", style = MaterialTheme.typography.titleLarge)
             Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column {
@@ -748,7 +939,7 @@ private fun SettingsScreen(onBack: () -> Unit, onGoals: () -> Unit) {
                                 val next = settings.copy(dailyEnabled = checked)
                                 persist(next)
                                 if (checked && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                                 }
                             },
                         )
@@ -787,7 +978,7 @@ private fun SettingsScreen(onBack: () -> Unit, onGoals: () -> Unit) {
                             val next = settings.copy(monthlyReviewEnabled = checked)
                             persist(next)
                             if (checked && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                             }
                         },
                     )
@@ -1263,6 +1454,28 @@ private fun growthColor(type: String): Color = when (type) {
     GrowthType.BEAUTY -> HabitamaAccent
     GrowthType.RECOVERY -> Color(0xFF4C9FBC)
     else -> HabitamaSuccess
+}
+
+private fun deviceCalendarColor(color: Int): Color = if (color == 0) HabitamaBlue else Color(color)
+
+private fun deviceCalendarTimeLabel(event: DeviceCalendarEvent): String {
+    if (event.allDay) return "終日"
+    val zone = ZoneId.systemDefault()
+    val start = Instant.ofEpochMilli(event.startMillis).atZone(zone)
+    val end = Instant.ofEpochMilli(event.endMillis).atZone(zone)
+    return if (start.toLocalDate() == end.toLocalDate()) {
+        "${start.format(DateTimeFormatter.ofPattern("H:mm"))}〜${end.format(DateTimeFormatter.ofPattern("H:mm"))}"
+    } else {
+        "${start.format(DateTimeFormatter.ofPattern("M/d H:mm"))}〜${end.format(DateTimeFormatter.ofPattern("M/d H:mm"))}"
+    }
+}
+
+private fun openDeviceCalendarEvent(context: Context, event: DeviceCalendarEvent) {
+    val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, event.eventId)
+    val intent = Intent(Intent.ACTION_VIEW, uri)
+        .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, event.startMillis)
+        .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, event.endMillis)
+    runCatching { context.startActivity(intent) }
 }
 
 private fun formatDate(date: LocalDate): String = date.format(DateTimeFormatter.ofPattern("M月d日(E)", Locale.JAPANESE))

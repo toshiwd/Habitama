@@ -2,7 +2,7 @@
 
 ハビタマは、結果目標ではなく「今日できる行動」を記録し、できた分を成長へ変換するAndroidアプリです。
 
-v0.5.0では、運動・健康・学び・暮らし・お金の14サンプルを用意し、名前・目標値・単位をまとめて入力できます。回、分、時間、歩、ページ、kcal、円などの単位は一覧から選べ、一覧にない単位は自由入力できます。「目標以上」と「目標以内」の2種類の達成方法に対応し、カロリーや支出の上限も逆評価されません。
+v0.6.0では、端末に同期済みのGoogleカレンダーなどの予定を、読み取り専用で行動カレンダーへ表示できます。設定で表示対象のカレンダーを選べ、月表示の予定マーカー、日別の時刻・タイトル、標準カレンダーアプリへの導線を提供します。予定内容はHabitamaのデータベースへ保存せず、予定の追加・変更権限も要求しません。
 
 設定画面の「アプリの更新」から最新版を確認できます。更新がある場合はAndroid標準のダウンロード管理でAPKを取得し、SHA-256検証に成功したファイルだけをインストール画面へ渡します。ブラウザでGitHubのリンクを開く必要はありません。
 
@@ -48,10 +48,10 @@ $env:ANDROID_HOME="$env:LOCALAPPDATA\Android\Sdk"
 
 成果物はGit管理外の`dist`に生成されます。
 
-- `Habitama-0.5.0.apk`
+- `Habitama-0.6.0.apk`
 - `version.json`
-- `Habitama-0.5.0.sha256`
-- `Habitama-0.5.0-cert.txt`
+- `Habitama-0.6.0.sha256`
+- `Habitama-0.6.0-cert.txt`
 
 ## GitHub Release
 
@@ -62,6 +62,6 @@ $env:ANDROID_HOME="$env:LOCALAPPDATA\Android\Sdk"
 .\scripts\verify-release.ps1
 ```
 
-公開先は[`toshiwd/Habitama`](https://github.com/toshiwd/Habitama)、今回のタグは`v0.5.0`です。公開時はAPKと`version.json`を必ず同じReleaseへ添付します。
+公開先は[`toshiwd/Habitama`](https://github.com/toshiwd/Habitama)、今回のタグは`v0.6.0`です。公開時はAPKと`version.json`を必ず同じReleaseへ添付します。
 
 詳細仕様は[開発仕様書 v0.5](docs/ハビタマ_Androidアプリ開発仕様書_v0.5.md)を参照してください。旧仕様は履歴として保持しています。

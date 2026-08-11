@@ -1,7 +1,7 @@
 # ハビタマ Androidアプリ 開発仕様書 v0.5
 
 - 更新日: 2026-08-11
-- アプリ版: 0.5.0（versionCode 7）
+- アプリ版: 0.6.0（versionCode 8）
 
 ## 1. 今回の変更
 
@@ -42,6 +42,18 @@
 - `AT_MOST`は実績が目標以下なら達成率100%、評価1.0、10ポイントとする。目標を超えた場合は目標÷実績を達成率と評価値に使用し、超過ボーナスは付けない。
 - 報告画面では`AT_LEAST`を「目標以上」、`AT_MOST`を「目標以内」と明示する。
 
+### 端末カレンダー読み取り契約
+
+- Android `CalendarContract`のCalendar Providerを使用し、端末に同期済みで表示状態のカレンダーを対象とする。
+- 要求する権限は`READ_CALENDAR`のみとし、`WRITE_CALENDAR`はmanifestへ追加しない。
+- 初期状態は無効とし、設定の「端末カレンダーの予定」を利用者がオンにした時だけ権限を要求する。
+- 初回許可時は表示可能なカレンダーを選択状態とし、設定画面でカレンダー単位に表示・非表示を変更できる。
+- 繰り返し予定を展開できる`CalendarContract.Instances`を使用し、現在月の範囲だけを問い合わせる。
+- 月表示ではHabitama記録を緑系、外部予定をカレンダー色のマーカーで区別する。
+- 日付選択時は終日または開始・終了時刻とタイトルを表示し、予定選択時はAndroid標準の予定表示画面を開く。
+- 予定、アカウント名、カレンダー名はRoomへ保存しない。SharedPreferencesには有効状態と選択したカレンダーIDだけを保存する。
+- 権限拒否、同期カレンダーなし、取得失敗でもHabitamaの記録カレンダーは継続して使用できる。
+
 ## 2. 更新情報契約
 
 - 更新情報は`https://github.com/toshiwd/Habitama/releases/latest/download/version.json`からHTTPSで取得する。
@@ -78,7 +90,8 @@
 - API 35で提供元許可画面とパッケージインストーラーを開ける。
 - 単体テスト、instrumentation、lint、debug/releaseビルド、公開物再取得検証が成功する。
 - API 35でカテゴリ切替、サンプル反映、単位選択、`AT_MOST`保存、Room migration 2→3を確認する。
+- API 35でREADのみのmanifest、権限状態、カレンダー選択保存、Calendar Providerからの予定取得、複数日予定、日別表示を確認する。
 
 ## 6. 非対象
 
-Google Play配布、差分APK、バックグラウンドでの無断インストール、強制更新、クラウド同期、AI、Health Connectは実装しない。
+Google Play配布、差分APK、バックグラウンドでの無断インストール、強制更新、Google Calendar APIによる直接同期、予定の追加・変更・削除、AI、Health Connectは実装しない。

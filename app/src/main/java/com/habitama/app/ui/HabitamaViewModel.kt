@@ -4,12 +4,16 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.habitama.app.HabitamaApplication
+import com.habitama.app.calendar.DeviceCalendar
+import com.habitama.app.calendar.DeviceCalendarEvent
 import com.habitama.app.data.DailyGoalRecordEntity
 import com.habitama.app.data.GoalDraft
 import com.habitama.app.data.GoalEntity
 import com.habitama.app.data.GoalGain
 import com.habitama.app.data.GrowthStatsEntity
 import java.time.LocalDate
+import java.time.YearMonth
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,6 +24,15 @@ import kotlinx.coroutines.launch
 data class HistoryDay(
     val date: LocalDate,
     val records: List<DailyGoalRecordEntity>,
+)
+
+data class DeviceCalendarUiState(
+    val enabled: Boolean = false,
+    val permissionGranted: Boolean = false,
+    val calendars: List<DeviceCalendar> = emptyList(),
+    val selectedCalendarIds: Set<Long> = emptySet(),
+    val events: List<DeviceCalendarEvent> = emptyList(),
+    val errorMessage: String? = null,
 )
 
 data class HabitamaUiState(
@@ -34,10 +47,13 @@ data class HabitamaUiState(
     val lastGains: List<GoalGain> = emptyList(),
     val lastEarned: Int = 0,
     val errorMessage: String? = null,
+    val deviceCalendar: DeviceCalendarUiState = DeviceCalendarUiState(),
 )
 
 class HabitamaViewModel(application: Application) : AndroidViewModel(application) {
-    private val repository = (application as HabitamaApplication).repository
+    private val habitamaApplication = application as HabitamaApplication
+    private val repository = habitamaApplication.repository
+    private val deviceCalendarRepository = habitamaApplication.deviceCalendarRepository
     private val _state = MutableStateFlow(HabitamaUiState())
     val state: StateFlow<HabitamaUiState> = _state.asStateFlow()
 
@@ -90,6 +106,88 @@ class HabitamaViewModel(application: Application) : AndroidViewModel(application
 
     fun clearError() {
         _state.update { it.copy(errorMessage = null) }
+    }
+
+    fun refreshDeviceCalendar() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val settings = deviceCalendarRepository.loadSettings()
+            val permissionGranted = deviceCalendarRepository.hasReadPermission()
+            if (!settings.enabled || !permissionGranted) {
+                _state.update {
+                    it.copy(
+                        deviceCalendar = it.deviceCalendar.copy(
+                            enabled = settings.enabled,
+                            permissionGranted = permissionGranted,
+                            calendars = emptyList(),
+                            selectedCalendarIds = emptySet(),
+                            events = emptyList(),
+                            errorMessage = null,
+                        ),
+                    )
+                }
+                return@launch
+            }
+
+            runCatching {
+                val calendars = deviceCalendarRepository.listVisibleCalendars()
+                val availableIds = calendars.mapTo(mutableSetOf()) { it.id }
+                val selectedIds = settings.selectedCalendarIds?.intersect(availableIds) ?: availableIds
+                if (settings.selectedCalendarIds == null && selectedIds.isNotEmpty()) {
+                    deviceCalendarRepository.setSelectedCalendarIds(selectedIds)
+                }
+                val month = YearMonth.from(_state.value.today)
+                val events = deviceCalendarRepository.eventsBetween(month.atDay(1), month.plusMonths(1).atDay(1), selectedIds)
+                DeviceCalendarUiState(
+                    enabled = true,
+                    permissionGranted = true,
+                    calendars = calendars,
+                    selectedCalendarIds = selectedIds,
+                    events = events,
+                )
+            }.onSuccess { calendarState ->
+                _state.update { it.copy(deviceCalendar = calendarState) }
+            }.onFailure { error ->
+                _state.update {
+                    it.copy(
+                        deviceCalendar = it.deviceCalendar.copy(
+                            enabled = true,
+                            permissionGranted = true,
+                            events = emptyList(),
+                            errorMessage = error.message ?: "端末カレンダーを読み込めませんでした",
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    fun setDeviceCalendarEnabled(enabled: Boolean) {
+        deviceCalendarRepository.setEnabled(enabled)
+        if (enabled) {
+            refreshDeviceCalendar()
+        } else {
+            _state.update { it.copy(deviceCalendar = DeviceCalendarUiState(permissionGranted = deviceCalendarRepository.hasReadPermission())) }
+        }
+    }
+
+    fun onDeviceCalendarPermissionDenied() {
+        deviceCalendarRepository.setEnabled(false)
+        _state.update {
+            it.copy(
+                deviceCalendar = DeviceCalendarUiState(
+                    permissionGranted = false,
+                    errorMessage = "カレンダー権限が許可されていないため、予定は表示しません。",
+                ),
+            )
+        }
+    }
+
+    fun setDeviceCalendarSelected(calendarId: Long, selected: Boolean) {
+        val current = _state.value.deviceCalendar.selectedCalendarIds
+        val next = if (selected) current + calendarId else current - calendarId
+        deviceCalendarRepository.setSelectedCalendarIds(next)
+        _state.update { it.copy(deviceCalendar = it.deviceCalendar.copy(selectedCalendarIds = next)) }
+        refreshDeviceCalendar()
     }
 
     private fun launchAction(onSuccess: () -> Unit, action: suspend () -> Unit) {
